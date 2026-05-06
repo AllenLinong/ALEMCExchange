@@ -47,7 +47,7 @@ public class PluginInitializer {
 
         // 初始化PlaceholderAPI扩展
         if (plugin.getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-            ALEMCExchangeExpansion expansion = new ALEMCExchangeExpansion(plugin, databaseManager);
+            ALEMCExchangeExpansion expansion = new ALEMCExchangeExpansion(plugin, configManager, databaseManager);
             expansion.register();
             plugin.getLogger().info("PlaceholderAPI expansion registered!");
         }

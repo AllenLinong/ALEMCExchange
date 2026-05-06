@@ -24,6 +24,10 @@ public class ConfigManager {
         lang = loadConfigFile("lang.yml");
         items = loadConfigFile("items.yml");
         menus = loadConfigFile("menus.yml");
+        
+        // 补全缺失的配置项
+        completeMissingConfig();
+        
         plugin.getLogger().info("Config files loaded successfully!");
     }
 
@@ -33,6 +37,22 @@ public class ConfigManager {
             plugin.saveResource(filename, false);
         }
         return YamlConfiguration.loadConfiguration(file);
+    }
+    
+    private void completeMissingConfig() {
+        // 补全 lang.yml 中缺失的 PlaceholderAPI 配置
+        if (!lang.contains("placeholder.autosell.enabled")) {
+            lang.set("placeholder.autosell.enabled", "开启");
+        }
+        if (!lang.contains("placeholder.autosell.disabled")) {
+            lang.set("placeholder.autosell.disabled", "关闭");
+        }
+        
+        try {
+            lang.save(new File(plugin.getDataFolder(), "lang.yml"));
+        } catch (IOException e) {
+            plugin.getLogger().warning("Could not save lang.yml: " + e.getMessage());
+        }
     }
 
     public void reloadConfig() {
