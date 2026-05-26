@@ -18,44 +18,41 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.sql.SQLException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MenuManager implements Listener {
 
     private final JavaPlugin plugin;
     private final ConfigManager configManager;
     private final DatabaseManager databaseManager;
-    private final Map<UUID, Inventory> playerInventories = new HashMap<>();
-    private final Map<UUID, String> playerMenuTypes = new HashMap<>();
-    private final Map<UUID, Integer> playerBrowsePages = new HashMap<>();
-    private final Map<UUID, Integer> playerExchangePages = new HashMap<>();
+    private final SchedulerUtil schedulerUtil;
+    private final ConcurrentHashMap<UUID, Inventory> playerInventories = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, String> playerMenuTypes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Integer> playerBrowsePages = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Integer> playerExchangePages = new ConcurrentHashMap<>();
     private final int ITEMS_PER_PAGE = 36;
     
-    // 缓存
-    private final Map<String, ItemStack> menuItemsCache = new HashMap<>();
-    private final Map<UUID, Double> playerBalanceCache = new HashMap<>();
-    private final Map<UUID, Map<String, Boolean>> playerUnlockedCache = new HashMap<>();
-    private final Map<UUID, Map<String, Integer>> playerMineProgressCache = new HashMap<>();
-    private final Map<UUID, Map<String, Integer>> playerSellProgressCache = new HashMap<>();
-    private final Map<UUID, Long> playerCacheTimestamps = new HashMap<>(); // 缓存时间戳
+    private final ConcurrentHashMap<String, ItemStack> menuItemsCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Double> playerBalanceCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Map<String, Boolean>> playerUnlockedCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Map<String, Integer>> playerMineProgressCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Map<String, Integer>> playerSellProgressCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Long> playerCacheTimestamps = new ConcurrentHashMap<>();
 
     public MenuManager(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager) {
         this.plugin = plugin;
         this.configManager = configManager;
         this.databaseManager = databaseManager;
+        this.schedulerUtil = new SchedulerUtil(plugin);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         
-        // 启动定期缓存清理任务
         startCacheCleanupTask();
     }
     
-    // 启动定期缓存清理任务
     private void startCacheCleanupTask() {
-        // 每5分钟清理一次缓存
-        plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, () -> {
-            // 清理菜单物品缓存（保留最近使用的物品）
+        schedulerUtil.runTimerAsync(() -> {
             if (menuItemsCache.size() > 1000) {
-                // 只保留最近使用的500个物品
-                Map<String, ItemStack> newCache = new HashMap<>();
+                Map<String, ItemStack> newCache = new ConcurrentHashMap<>();
                 int count = 0;
                 for (Map.Entry<String, ItemStack> entry : menuItemsCache.entrySet()) {
                     if (count < 500) {
@@ -67,10 +64,8 @@ public class MenuManager implements Listener {
                 }
                 menuItemsCache.clear();
                 menuItemsCache.putAll(newCache);
-                plugin.getLogger().info("清理了菜单物品缓存，保留了500个最近使用的物品");
             }
             
-            // 清理长时间未使用的玩家缓存（超过30分钟）
             long currentTime = System.currentTimeMillis();
             long thirtyMinutesAgo = currentTime - (30 * 60 * 1000);
             
@@ -85,11 +80,7 @@ public class MenuManager implements Listener {
                 clearPlayerCache(playerUUID);
                 playerCacheTimestamps.remove(playerUUID);
             }
-            
-            if (!toRemove.isEmpty()) {
-                plugin.getLogger().info("清理了 " + toRemove.size() + " 个长时间未使用的玩家缓存");
-            }
-        }, 0L, 5 * 60 * 20L); // 5分钟
+        }, 0L, 5 * 60 * 20L);
     }
 
     public void openMainMenu(Player player) {
@@ -99,7 +90,6 @@ public class MenuManager implements Listener {
 
         double balance = getCachedBalance(player.getUniqueId());
 
-        // 添加出售按钮
         List<String> sellLore = new ArrayList<>(configManager.getMenus().getStringList("menus.main.buttons.sell.lore"));
         for (int i = 0; i < sellLore.size(); i++) {
             sellLore.set(i, sellLore.get(i).replace("%balance%", String.format("%.2f", balance)));
@@ -111,7 +101,6 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.main.buttons.sell.slot"), sellItem);
 
-        // 添加兑换按钮
         List<String> exchangeLore = new ArrayList<>(configManager.getMenus().getStringList("menus.main.buttons.exchange.lore"));
         for (int i = 0; i < exchangeLore.size(); i++) {
             exchangeLore.set(i, exchangeLore.get(i).replace("%balance%", String.format("%.2f", balance)));
@@ -123,7 +112,6 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.main.buttons.exchange.slot"), exchangeItem);
 
-        // 添加浏览按钮
         List<String> browseLore = new ArrayList<>(configManager.getMenus().getStringList("menus.main.buttons.browse.lore"));
         for (int i = 0; i < browseLore.size(); i++) {
             browseLore.set(i, browseLore.get(i).replace("%balance%", String.format("%.2f", balance)));
@@ -135,7 +123,6 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.main.buttons.browse.slot"), browseItem);
 
-        // 添加关闭按钮
         ItemStack closeItem = createMenuItem(
                 Material.valueOf(configManager.getMenus().getString("menus.main.buttons.close.material")),
                 configManager.getMenus().getString("menus.main.buttons.close.display_name"),
@@ -153,10 +140,8 @@ public class MenuManager implements Listener {
 
         Inventory inventory = Bukkit.createInventory(player, 54, ColorUtil.translateColorCodes(configManager.getMenus().getString("menus.sell.title")));
 
-        // 添加玻璃板
         List<Integer> glassSlots = configManager.getMenus().getIntegerList("menus.sell.glass.slots");
         if (glassSlots.isEmpty()) {
-            // 默认值：第一行和第六行（除了按钮位置）
             glassSlots = Arrays.asList(0, 1, 2, 3, 5, 6, 7, 8, 45, 46, 47, 48, 50, 51, 52);
         }
         
@@ -171,7 +156,6 @@ public class MenuManager implements Listener {
             inventory.setItem(slot, glassPane);
         }
 
-        // 添加说明按钮
         ItemStack infoItem = createMenuItem(
                 Material.valueOf(configManager.getMenus().getString("menus.sell.buttons.info.material")),
                 configManager.getMenus().getString("menus.sell.buttons.info.display_name"),
@@ -179,9 +163,7 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.sell.buttons.info.slot"), infoItem);
 
-        // 添加出售按钮
         List<String> sellLore = new ArrayList<>(configManager.getMenus().getStringList("menus.sell.buttons.sell.lore"));
-        // 计算税率
         double taxRate = configManager.getConfig().getDouble("sell_tax", 0.05);
         if (player.hasPermission("alemcexchange.notax")) {
             taxRate = 0.0;
@@ -199,7 +181,6 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.sell.buttons.sell.slot"), sellItem);
 
-        // 添加返回按钮
         ItemStack backItem = createMenuItem(
                 Material.valueOf(configManager.getMenus().getString("menus.sell.buttons.back.material")),
                 configManager.getMenus().getString("menus.sell.buttons.back.display_name"),
@@ -221,10 +202,8 @@ public class MenuManager implements Listener {
 
         Inventory inventory = Bukkit.createInventory(player, 54, ColorUtil.translateColorCodes(configManager.getMenus().getString("menus.exchange.title")));
 
-        // 添加玻璃板
         List<Integer> glassSlots = configManager.getMenus().getIntegerList("menus.exchange.glass.slots");
         if (glassSlots.isEmpty()) {
-            // 默认值：第一行和第六行（除了按钮位置）
             glassSlots = Arrays.asList(0, 1, 2, 3, 5, 6, 7, 47, 48, 50, 51, 52, 53);
         }
         
@@ -239,10 +218,8 @@ public class MenuManager implements Listener {
             inventory.setItem(slot, glassPane);
         }
 
-        // 读取物品显示区域配置
         List<Integer> displaySlots = configManager.getMenus().getIntegerList("menus.exchange.display.slots");
         if (displaySlots.isEmpty()) {
-            // 默认值：第二行到第五行
             displaySlots = Arrays.asList(9, 10, 11, 12, 13, 14, 15, 16, 17,
                                          18, 19, 20, 21, 22, 23, 24, 25, 26,
                                          27, 28, 29, 30, 31, 32, 33, 34, 35,
@@ -250,7 +227,6 @@ public class MenuManager implements Listener {
         }
         int itemsPerPage = displaySlots.size();
 
-        // 添加说明按钮
         List<String> infoLore = new ArrayList<>(configManager.getMenus().getStringList("menus.exchange.buttons.info.lore"));
         try {
             double balance = databaseManager.getEMCBalance(player.getUniqueId());
@@ -268,7 +244,6 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.exchange.buttons.info.slot"), infoItem);
 
-        // 添加返回按钮
         ItemStack backItem = createMenuItem(
                 Material.valueOf(configManager.getMenus().getString("menus.exchange.buttons.back.material")),
                 configManager.getMenus().getString("menus.exchange.buttons.back.display_name"),
@@ -276,11 +251,8 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.exchange.buttons.back.slot"), backItem);
 
-        // 获取所有物品
         List<String> allMaterials = new ArrayList<>(configManager.getItems().getConfigurationSection("items").getKeys(false));
-        // 批量获取解锁状态
         Map<String, Boolean> unlockedStatuses = getCachedUnlockedStatuses(player.getUniqueId(), allMaterials);
-        // 筛选已解锁物品
         List<String> unlockedMaterials = new ArrayList<>();
         for (String materialName : allMaterials) {
             if (unlockedStatuses.getOrDefault(materialName, false)) {
@@ -291,11 +263,9 @@ public class MenuManager implements Listener {
         int totalItems = unlockedMaterials.size();
         int totalPages = (totalItems + itemsPerPage - 1) / itemsPerPage;
 
-        // 计算当前页的物品范围
         int startIndex = (page - 1) * itemsPerPage;
         int endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
-        // 添加当前页的物品
         int slotIndex = 0;
         for (int i = startIndex; i < endIndex && slotIndex < displaySlots.size(); i++) {
             String materialName = unlockedMaterials.get(i);
@@ -317,14 +287,12 @@ public class MenuManager implements Listener {
                     item.setItemMeta(meta);
                 }
                 inventory.setItem(slot, item);
-                slotIndex++; // 只有成功放置后才递增
+                slotIndex++;
             } catch (IllegalArgumentException e) {
                 plugin.getLogger().warning("Invalid material: " + materialName);
-                // 不递增 slotIndex，继续尝试下一个物品
             }
         }
 
-        // 添加上一页按钮
         if (page > 1) {
             List<String> prevLore = new ArrayList<>(configManager.getMenus().getStringList("menus.exchange.buttons.prev_page.lore"));
             for (int i = 0; i < prevLore.size(); i++) {
@@ -338,7 +306,6 @@ public class MenuManager implements Listener {
             inventory.setItem(configManager.getMenus().getInt("menus.exchange.buttons.prev_page.slot"), prevItem);
         }
 
-        // 添加下一页按钮
         if (page < totalPages) {
             List<String> nextLore = new ArrayList<>(configManager.getMenus().getStringList("menus.exchange.buttons.next_page.lore"));
             for (int i = 0; i < nextLore.size(); i++) {
@@ -352,7 +319,6 @@ public class MenuManager implements Listener {
             inventory.setItem(configManager.getMenus().getInt("menus.exchange.buttons.next_page.slot"), nextItem);
         }
 
-        // 添加页码信息按钮
         String pageInfoDisplayName = configManager.getMenus().getString("menus.exchange.buttons.page_info.display_name")
                 .replace("%page%", String.valueOf(page))
                 .replace("%total_pages%", String.valueOf(totalPages));
@@ -384,10 +350,8 @@ public class MenuManager implements Listener {
 
         Inventory inventory = Bukkit.createInventory(player, 54, ColorUtil.translateColorCodes(configManager.getMenus().getString("menus.browse.title")));
 
-        // 添加玻璃板
         List<Integer> glassSlots = configManager.getMenus().getIntegerList("menus.browse.glass.slots");
         if (glassSlots.isEmpty()) {
-            // 默认值：第一行和第六行（除了按钮位置）
             glassSlots = Arrays.asList(0, 1, 2, 3, 5, 6, 7, 47, 48, 50, 51, 52, 53);
         }
         
@@ -402,10 +366,8 @@ public class MenuManager implements Listener {
             inventory.setItem(slot, glassPane);
         }
 
-        // 读取物品显示区域配置
         List<Integer> displaySlots = configManager.getMenus().getIntegerList("menus.browse.display.slots");
         if (displaySlots.isEmpty()) {
-            // 默认值：第二行到第五行
             displaySlots = Arrays.asList(9, 10, 11, 12, 13, 14, 15, 16, 17,
                                          18, 19, 20, 21, 22, 23, 24, 25, 26,
                                          27, 28, 29, 30, 31, 32, 33, 34, 35,
@@ -413,7 +375,6 @@ public class MenuManager implements Listener {
         }
         int itemsPerPage = displaySlots.size();
 
-        // 添加说明按钮
         ItemStack infoItem = createMenuItem(
                 Material.valueOf(configManager.getMenus().getString("menus.browse.buttons.info.material")),
                 configManager.getMenus().getString("menus.browse.buttons.info.display_name"),
@@ -421,7 +382,6 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.browse.buttons.info.slot"), infoItem);
 
-        // 添加返回按钮
         ItemStack backItem = createMenuItem(
                 Material.valueOf(configManager.getMenus().getString("menus.browse.buttons.back.material")),
                 configManager.getMenus().getString("menus.browse.buttons.back.display_name"),
@@ -429,22 +389,18 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.browse.buttons.back.slot"), backItem);
 
-        // 获取所有物品
         List<String> materials = new ArrayList<>(configManager.getItems().getConfigurationSection("items").getKeys(false));
         int totalItems = materials.size();
         int totalPages = (totalItems + itemsPerPage - 1) / itemsPerPage;
 
-        // 计算当前页的物品范围
         int startIndex = (page - 1) * itemsPerPage;
         int endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
-        // 批量获取当前页物品的状态
         List<String> currentPageMaterials = materials.subList(startIndex, endIndex);
         Map<String, Boolean> unlockedStatuses = getCachedUnlockedStatuses(player.getUniqueId(), currentPageMaterials);
         Map<String, Integer> mineProgresses = getCachedMineProgresses(player.getUniqueId(), currentPageMaterials);
         Map<String, Integer> sellProgresses = getCachedSellProgresses(player.getUniqueId(), currentPageMaterials);
 
-        // 添加当前页的物品
         int slotIndex = 0;
         for (int i = startIndex; i < endIndex && slotIndex < displaySlots.size(); i++) {
             String materialName = materials.get(i);
@@ -480,14 +436,12 @@ public class MenuManager implements Listener {
                         item.setItemMeta(meta);
                     }
                 inventory.setItem(slot, item);
-                slotIndex++; // 只有成功放置后才递增
+                slotIndex++;
             } catch (IllegalArgumentException e) {
                 plugin.getLogger().warning("Invalid material: " + materialName);
-                // 不递增 slotIndex，继续尝试下一个物品
             }
         }
 
-        // 添加上一页按钮
         if (page > 1) {
             List<String> prevLore = new ArrayList<>(configManager.getMenus().getStringList("menus.browse.buttons.prev_page.lore"));
             for (int i = 0; i < prevLore.size(); i++) {
@@ -501,7 +455,6 @@ public class MenuManager implements Listener {
             inventory.setItem(configManager.getMenus().getInt("menus.browse.buttons.prev_page.slot"), prevItem);
         }
 
-        // 添加下一页按钮
         if (page < totalPages) {
             List<String> nextLore = new ArrayList<>(configManager.getMenus().getStringList("menus.browse.buttons.next_page.lore"));
             for (int i = 0; i < nextLore.size(); i++) {
@@ -515,7 +468,6 @@ public class MenuManager implements Listener {
             inventory.setItem(configManager.getMenus().getInt("menus.browse.buttons.next_page.slot"), nextItem);
         }
 
-        // 添加页码信息按钮
         String pageInfoDisplayName = configManager.getMenus().getString("menus.browse.buttons.page_info.display_name")
                 .replace("%page%", String.valueOf(page))
                 .replace("%total_pages%", String.valueOf(totalPages));
@@ -557,12 +509,10 @@ public class MenuManager implements Listener {
         if (menuType.equals("sell")) {
             int slot = event.getRawSlot();
             
-            // 获取按钮位置
             int infoSlot = configManager.getMenus().getInt("menus.sell.buttons.info.slot");
             int sellSlot = configManager.getMenus().getInt("menus.sell.buttons.sell.slot");
             int backSlot = configManager.getMenus().getInt("menus.sell.buttons.back.slot");
             
-            // 检查是否点击的是按钮
             if (clickedItem != null && clickedItem.getType() != Material.AIR) {
                 if (slot == infoSlot || slot == sellSlot || slot == backSlot) {
                     event.setCancelled(true);
@@ -571,27 +521,20 @@ public class MenuManager implements Listener {
                 }
             }
             
-            // slot >= 54 表示玩家点击的是自己的背包，允许
             if (slot >= 54) {
                 return;
             }
             
-            // slot < 9 或 slot >= 45 表示点击的是玻璃板区域，阻止
             if (slot < 9 || slot >= 45) {
                 event.setCancelled(true);
                 return;
             }
             
-            // slot >= 9 && slot < 45 表示点击的是中间区域，允许放置物品
-            // 但需要检查是否是按钮位置
             if (slot == infoSlot || slot == sellSlot || slot == backSlot) {
                 event.setCancelled(true);
                 return;
             }
-            
-            // 允许在中间行放置物品
         } else {
-            // 其他菜单取消所有点击事件
             event.setCancelled(true);
             
             if (clickedItem == null || clickedItem.getType() == Material.AIR) {
@@ -603,35 +546,30 @@ public class MenuManager implements Listener {
                     handleMainMenuClick(player, clickedItem);
                     break;
                 case "exchange":
-                    // 兑换菜单点击处理
                     int exchangeSlot = event.getRawSlot();
-                    // 读取按钮位置配置
                     int backSlot = configManager.getMenus().getInt("menus.exchange.buttons.back.slot", 8);
                     int prevPageSlot = configManager.getMenus().getInt("menus.exchange.buttons.prev_page.slot", 45);
                     int nextPageSlot = configManager.getMenus().getInt("menus.exchange.buttons.next_page.slot", 53);
                     int pageInfoSlot = configManager.getMenus().getInt("menus.exchange.buttons.page_info.slot", 49);
                     
-                    if (exchangeSlot == backSlot) { // 返回按钮
+                    if (exchangeSlot == backSlot) {
                         event.setCancelled(true);
                         openMainMenu(player);
-                    } else if (exchangeSlot == prevPageSlot) { // 上一页按钮
+                    } else if (exchangeSlot == prevPageSlot) {
                         event.setCancelled(true);
                         int currentPage = playerExchangePages.getOrDefault(player.getUniqueId(), 1);
                         if (currentPage > 1) {
                             openExchangeMenu(player, currentPage - 1);
                         }
-                    } else if (exchangeSlot == nextPageSlot) { // 下一页按钮
+                    } else if (exchangeSlot == nextPageSlot) {
                         event.setCancelled(true);
                         int currentPage = playerExchangePages.getOrDefault(player.getUniqueId(), 1);
                         openExchangeMenu(player, currentPage + 1);
-                    } else if (exchangeSlot == pageInfoSlot) { // 页码信息按钮
+                    } else if (exchangeSlot == pageInfoSlot) {
                         event.setCancelled(true);
-                        // 页码信息按钮不做任何操作
                     } else {
-                        // 检查是否点击的是物品显示区域
                         List<Integer> displaySlots = configManager.getMenus().getIntegerList("menus.exchange.display.slots");
                         if (displaySlots.isEmpty()) {
-                            // 默认值：第二行到第五行
                             displaySlots = Arrays.asList(9, 10, 11, 12, 13, 14, 15, 16, 17,
                                                          18, 19, 20, 21, 22, 23, 24, 25, 26,
                                                          27, 28, 29, 30, 31, 32, 33, 34, 35,
@@ -643,30 +581,27 @@ public class MenuManager implements Listener {
                     }
                     break;
                 case "browse":
-                        // 浏览菜单点击处理
                         int browseSlot = event.getRawSlot();
-                        // 读取按钮位置配置
                         int browseBackSlot = configManager.getMenus().getInt("menus.browse.buttons.back.slot", 45);
                         int browsePrevPageSlot = configManager.getMenus().getInt("menus.browse.buttons.prev_page.slot", 46);
                         int browseNextPageSlot = configManager.getMenus().getInt("menus.browse.buttons.next_page.slot", 52);
                         int browsePageInfoSlot = configManager.getMenus().getInt("menus.browse.buttons.page_info.slot", 49);
                         
-                        if (browseSlot == browseBackSlot) { // 返回按钮
+                        if (browseSlot == browseBackSlot) {
                             event.setCancelled(true);
                             openMainMenu(player);
-                        } else if (browseSlot == browsePrevPageSlot) { // 上一页按钮
+                        } else if (browseSlot == browsePrevPageSlot) {
                             event.setCancelled(true);
                             int currentPage = playerBrowsePages.getOrDefault(player.getUniqueId(), 1);
                             if (currentPage > 1) {
                                 openBrowseMenu(player, currentPage - 1);
                             }
-                        } else if (browseSlot == browseNextPageSlot) { // 下一页按钮
+                        } else if (browseSlot == browseNextPageSlot) {
                             event.setCancelled(true);
                             int currentPage = playerBrowsePages.getOrDefault(player.getUniqueId(), 1);
                             openBrowseMenu(player, currentPage + 1);
-                        } else if (browseSlot == browsePageInfoSlot) { // 页码信息按钮
+                        } else if (browseSlot == browsePageInfoSlot) {
                             event.setCancelled(true);
-                            // 页码信息按钮不做任何操作
                         }
                         break;
             }
@@ -688,14 +623,11 @@ public class MenuManager implements Listener {
         }
 
         if (menuType.equals("sell")) {
-            // 检查拖拽的槽位
             for (int slot : event.getRawSlots()) {
-                // 阻止拖拽到顶部和底部玻璃板区域
                 if (slot < 9 || slot >= 45) {
                     event.setCancelled(true);
                     return;
                 }
-                // 阻止拖拽到按钮位置
                 if (slot == configManager.getMenus().getInt("menus.sell.buttons.info.slot") ||
                         slot == configManager.getMenus().getInt("menus.sell.buttons.sell.slot") ||
                         slot == configManager.getMenus().getInt("menus.sell.buttons.back.slot")) {
@@ -703,9 +635,7 @@ public class MenuManager implements Listener {
                     return;
                 }
             }
-            // 允许拖拽到中间区域（9-44）
         } else {
-            // 其他菜单取消所有拖拽事件
             event.setCancelled(true);
         }
     }
@@ -734,16 +664,13 @@ public class MenuManager implements Listener {
         String backDisplayName = ColorUtil.translateColorCodes( configManager.getMenus().getString("menus.sell.buttons.back.display_name"));
         
         if (displayName.equals(sellDisplayName)) {
-            // 处理出售
             final double[] totalEMC = {0};
             final List<ItemStack> returnItems = new ArrayList<>();
             final List<ItemStack> itemsToRemove = new ArrayList<>();
             final List<String> materialNames = new ArrayList<>();
             final List<Integer> amounts = new ArrayList<>();
 
-            // 收集需要处理的物品
             for (int i = 0; i < inventory.getSize(); i++) {
-                // 只处理中间行（9-44）的物品
                 if (i < 9 || i >= 45) {
                     continue;
                 }
@@ -771,14 +698,12 @@ public class MenuManager implements Listener {
                 }
             }
 
-            // 异步处理数据库操作
             if (totalEMC[0] > 0) {
                 final double finalTotalEMC = totalEMC[0];
                 final List<String> finalMaterialNames = materialNames;
                 final List<Integer> finalAmounts = amounts;
                 
-                runAsync(player, () -> {
-                    // 计算税费
+                schedulerUtil.runAsync(() -> {
                     double taxRate = configManager.getConfig().getDouble("sell_tax", 0.05);
                     if (player.hasPermission("alemcexchange.notax")) {
                         taxRate = 0.0;
@@ -792,12 +717,10 @@ public class MenuManager implements Listener {
                     final double netEMC = finalTotalEMC - tax;
 
                     try {
-                        // 处理出售进度和解锁
                         for (int i = 0; i < finalMaterialNames.size(); i++) {
                             String materialName = finalMaterialNames.get(i);
                             int amount = finalAmounts.get(i);
                             
-                            // 检查物品是否已解锁
                             if (!databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
                                 int requiredSell = configManager.getItems().getInt("items." + materialName + ".required_sell");
                                 if (requiredSell > 0) {
@@ -807,25 +730,20 @@ public class MenuManager implements Listener {
                                         databaseManager.addSellProgress(player.getUniqueId(), materialName, addAmount);
                                     }
                                 }
-                                // 检查是否解锁
                                 checkUnlock(player, materialName);
                             }
                         }
 
-                        // 增加EMC余额
                         databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
                         
-                        // 在主线程中发送消息，适配 Paper 和 Folia
-                        runSync(player, () -> {
+                        schedulerUtil.runTask(() -> {
                             String message = configManager.getLang().getString("prefix") + 
                                     configManager.getLang().getString("menu.sell.success").replace("{amount}", String.format("%.2f", netEMC));
                             player.sendMessage(ColorUtil.translateColorCodes( message));
                         });
                     } catch (SQLException | ClassNotFoundException e) {
-                        // 在主线程中发送错误消息，适配 Paper 和 Folia
-                        runSync(player, () -> {
+                        schedulerUtil.runTask(() -> {
                             player.sendMessage(ColorUtil.translateColorCodes( configManager.getLang().getString("prefix") + configManager.getLang().getString("menu.sell.failed")));
-                            // 出售失败，将物品返还给玩家
                             for (ItemStack item : itemsToRemove) {
                                 Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
                                 for (ItemStack leftoverItem : leftover.values()) {
@@ -838,7 +756,6 @@ public class MenuManager implements Listener {
                 });
             }
 
-            // 返回不可出售的物品
             for (ItemStack item : returnItems) {
                 Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
                 for (ItemStack leftoverItem : leftover.values()) {
@@ -898,7 +815,7 @@ public class MenuManager implements Listener {
             int canAdd = (emptySlots * maxStackSize) + existingPartialSlotSpace;
 
             if (configManager.isDebugEnabled()) {
-                plugin.getLogger().info("[DEBUG] 购买检查 - 玩家: " + player.getName() + ", 材料: " + materialName + ", 请求: " + amount + ", 可放入: " + canAdd + ", 空格子: " + emptySlots + ", 部分空间: " + existingPartialSlotSpace);
+                plugin.getLogger().info("[DEBUG] purchase - player: " + player.getName() + ", material: " + materialName + ", req: " + amount + ", canAdd: " + canAdd + ", empty: " + emptySlots + ", partial: " + existingPartialSlotSpace);
             }
 
             if (canAdd < amount) {
@@ -909,16 +826,8 @@ public class MenuManager implements Listener {
             databaseManager.addEMCBalance(player.getUniqueId(), -totalEMC);
             clearPlayerCache(player.getUniqueId());
 
-            if (configManager.isDebugEnabled()) {
-                plugin.getLogger().info("[DEBUG] 购买执行 - 玩家: " + player.getName() + ", 材料: " + materialName + ", 数量: " + amount + ", EMC: " + totalEMC);
-            }
-
             ItemStack itemToAdd = new ItemStack(material, amount);
             player.getInventory().addItem(itemToAdd);
-
-            if (configManager.isDebugEnabled()) {
-                plugin.getLogger().info("[DEBUG] 购买完成 - 玩家: " + player.getName() + ", 材料: " + materialName + ", 数量: " + amount);
-            }
 
             String message = configManager.getLang().getString("prefix") +
                     configManager.getLang().getString("menu.exchange.purchase-success").replace("{amount}", String.format("%.2f", totalEMC));
@@ -934,9 +843,7 @@ public class MenuManager implements Listener {
         Inventory inventory = event.getInventory();
         String menuType = playerMenuTypes.get(player.getUniqueId());
         
-        // 如果是出售菜单，将物品返回给玩家
         if ("sell".equals(menuType) && inventory != null) {
-            // 遍历出售菜单的中间区域（索引9-44），将物品返回给玩家
             for (int i = 9; i < 45; i++) {
                 ItemStack item = inventory.getItem(i);
                 if (item != null && item.getType() != Material.AIR) {
@@ -952,10 +859,8 @@ public class MenuManager implements Listener {
     }
 
     private ItemStack createMenuItem(Material material, String displayName, List<String> lore) {
-        // 生成缓存键
         String cacheKey = material.name() + ":" + displayName + ":" + lore.toString();
         
-        // 检查缓存
         if (menuItemsCache.containsKey(cacheKey)) {
             return menuItemsCache.get(cacheKey);
         }
@@ -972,15 +877,12 @@ public class MenuManager implements Listener {
             item.setItemMeta(meta);
         }
         
-        // 缓存物品
         menuItemsCache.put(cacheKey, item);
         return item;
     }
     
-    // 获取缓存的玩家余额
     private double getCachedBalance(UUID playerUUID) {
         if (playerBalanceCache.containsKey(playerUUID)) {
-            // 更新时间戳
             playerCacheTimestamps.put(playerUUID, System.currentTimeMillis());
             return playerBalanceCache.get(playerUUID);
         }
@@ -996,7 +898,6 @@ public class MenuManager implements Listener {
         }
     }
     
-    // 批量获取缓存的解锁状态
     private Map<String, Boolean> getCachedUnlockedStatuses(UUID playerUUID, List<String> materials) {
         if (playerUnlockedCache.containsKey(playerUUID)) {
             Map<String, Boolean> cachedStatuses = playerUnlockedCache.get(playerUUID);
@@ -1008,7 +909,6 @@ public class MenuManager implements Listener {
                 }
             }
             if (allCached) {
-                // 更新时间戳
                 playerCacheTimestamps.put(playerUUID, System.currentTimeMillis());
                 Map<String, Boolean> result = new HashMap<>();
                 for (String material : materials) {
@@ -1033,7 +933,6 @@ public class MenuManager implements Listener {
         }
     }
     
-    // 批量获取缓存的挖掘进度
     private Map<String, Integer> getCachedMineProgresses(UUID playerUUID, List<String> materials) {
         if (playerMineProgressCache.containsKey(playerUUID)) {
             Map<String, Integer> cachedProgresses = playerMineProgressCache.get(playerUUID);
@@ -1067,7 +966,6 @@ public class MenuManager implements Listener {
         }
     }
     
-    // 批量获取缓存的出售进度
     private Map<String, Integer> getCachedSellProgresses(UUID playerUUID, List<String> materials) {
         if (playerSellProgressCache.containsKey(playerUUID)) {
             Map<String, Integer> cachedProgresses = playerSellProgressCache.get(playerUUID);
@@ -1101,7 +999,6 @@ public class MenuManager implements Listener {
         }
     }
     
-    // 清理玩家缓存
     public void clearPlayerCache(UUID playerUUID) {
         playerBalanceCache.remove(playerUUID);
         playerUnlockedCache.remove(playerUUID);
@@ -1110,7 +1007,6 @@ public class MenuManager implements Listener {
         playerCacheTimestamps.remove(playerUUID);
     }
     
-    // 清理所有缓存
     public void clearAllCache() {
         menuItemsCache.clear();
         playerBalanceCache.clear();
@@ -1132,65 +1028,13 @@ public class MenuManager implements Listener {
 
         if (mineCondition && sellCondition && !databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
             databaseManager.unlockItem(player.getUniqueId(), materialName);
-            // 解锁后清理玩家缓存，确保下次打开菜单时能看到新解锁的物品
             clearPlayerCache(player.getUniqueId());
-            // 获取物品名称，如果配置了name选项则使用配置的名称，否则使用材质名称
             String itemDisplayName = configManager.getItems().getString("items." + materialName + ".name", materialName);
             final String message = configManager.getLang().getString("prefix") + 
                     configManager.getLang().getString("mine.unlocked").replace("{item}", itemDisplayName);
-            // 在主线程中发送消息，适配 Paper 和 Folia
-            runSync(player, () -> {
+            schedulerUtil.runTask(() -> {
                 player.sendMessage(ColorUtil.translateColorCodes( message));
             });
         }
     }
-    
-    /**
-     * 运行异步任务，适配 Paper 和 Folia
-     */
-    private void runAsync(Player player, Runnable task) {
-        try {
-            // 尝试使用 Folia 的调度器 API
-            Class<?> scheduledTaskClass = Class.forName("io.papermc.paper.threadedregions.scheduler.ScheduledTask");
-            Class<?> regionizedServerClass = Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
-            Object server = Bukkit.getServer();
-            if (regionizedServerClass.isInstance(server)) {
-                // 使用 Folia 调度器
-                Class<?> schedulerClass = Class.forName("io.papermc.paper.threadedregions.scheduler.Scheduler");
-                Object scheduler = regionizedServerClass.getMethod("getGlobalRegionScheduler").invoke(server);
-                schedulerClass.getMethod("runAsync", JavaPlugin.class, Runnable.class).invoke(scheduler, plugin, task);
-            } else {
-                // 如果是 Paper 服务器，使用标准 Bukkit 调度器
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
-            }
-        } catch (Exception e) {
-            // 如果是 Paper 服务器，使用标准 Bukkit 调度器
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
-        }
-    }
-    
-    /**
-     * 运行同步任务，适配 Paper 和 Folia
-     */
-    private void runSync(Player player, Runnable task) {
-        try {
-            // 尝试使用 Folia 的调度器 API
-            Class<?> scheduledTaskClass = Class.forName("io.papermc.paper.threadedregions.scheduler.ScheduledTask");
-            Class<?> regionizedServerClass = Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
-            Object server = Bukkit.getServer();
-            if (regionizedServerClass.isInstance(server)) {
-                // 使用 Folia 调度器
-                Class<?> schedulerClass = Class.forName("io.papermc.paper.threadedregions.scheduler.Scheduler");
-                Object scheduler = regionizedServerClass.getMethod("getGlobalRegionScheduler").invoke(server);
-                schedulerClass.getMethod("run", JavaPlugin.class, Runnable.class, Object.class).invoke(scheduler, plugin, task, null);
-            } else {
-                // 如果是 Paper 服务器，使用标准 Bukkit 调度器
-                Bukkit.getScheduler().runTask(plugin, task);
-            }
-        } catch (Exception e) {
-            // 如果是 Paper 服务器，使用标准 Bukkit 调度器
-            Bukkit.getScheduler().runTask(plugin, task);
-        }
-    }
-
 }

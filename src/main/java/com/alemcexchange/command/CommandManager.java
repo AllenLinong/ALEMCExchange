@@ -5,6 +5,7 @@ import com.alemcexchange.database.DatabaseManager;
 import com.alemcexchange.listener.PlayerPickupItemListener;
 import com.alemcexchange.util.ColorUtil;
 import com.alemcexchange.util.MenuManager;
+import com.alemcexchange.util.SchedulerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -25,6 +26,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
     private final DatabaseManager databaseManager;
     private final MenuManager menuManager;
     private final PlayerPickupItemListener playerPickupItemListener;
+    private final SchedulerUtil schedulerUtil;
 
     public CommandManager(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager, MenuManager menuManager, PlayerPickupItemListener playerPickupItemListener) {
         this.plugin = plugin;
@@ -32,6 +34,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         this.databaseManager = databaseManager;
         this.menuManager = menuManager;
         this.playerPickupItemListener = playerPickupItemListener;
+        this.schedulerUtil = new SchedulerUtil(plugin);
     }
 
     public void registerCommands() {
@@ -408,14 +411,11 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             return;
         }
 
-        // 立即发送消息，不等待数据库操作完成
         sendMessage(player, "command.unlockall.success", "player", target.getName());
 
-        // 异步执行数据库操作
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        schedulerUtil.runAsync(() -> {
             try {
                 databaseManager.unlockAllItems(target.getUniqueId());
-                // 清理目标玩家的缓存
                 menuManager.clearPlayerCache(target.getUniqueId());
             } catch (SQLException | ClassNotFoundException e) {
                 plugin.getLogger().severe("Error unlocking all items: " + e.getMessage());
@@ -503,14 +503,11 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             return;
         }
 
-        // 立即发送消息，不等待数据库操作完成
         sendMessage(sender, "command.unlockall.success", "player", target.getName());
 
-        // 异步执行数据库操作
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        schedulerUtil.runAsync(() -> {
             try {
                 databaseManager.unlockAllItems(target.getUniqueId());
-                // 清理目标玩家的缓存
                 menuManager.clearPlayerCache(target.getUniqueId());
             } catch (SQLException | ClassNotFoundException e) {
                 plugin.getLogger().severe("Error unlocking all items: " + e.getMessage());
@@ -518,7 +515,6 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         });
     }
 
-    // 后台执行 set 命令
     private void handleSetCommandForConsole(CommandSender sender, String[] args) {
         if (args.length < 3) {
             sendMessage(sender, "command.set.usage");
@@ -574,11 +570,9 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             return;
         }
 
-        // 异步执行数据库操作
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        schedulerUtil.runAsync(() -> {
             try {
                 databaseManager.unlockItem(target.getUniqueId(), material);
-                // 清理目标玩家的缓存
                 menuManager.clearPlayerCache(target.getUniqueId());
                 sendMessage(player, "command.unlock.success", "player", target.getName(), "item", material);
             } catch (SQLException | ClassNotFoundException e) {
@@ -588,7 +582,6 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         });
     }
 
-    // 后台执行 unlock 命令
     private void handleUnlockCommandForConsole(CommandSender sender, String[] args) {
         if (args.length < 3) {
             sendMessage(sender, "command.unlock.usage");
@@ -609,11 +602,9 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             return;
         }
 
-        // 异步执行数据库操作
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        schedulerUtil.runAsync(() -> {
             try {
                 databaseManager.unlockItem(target.getUniqueId(), material);
-                // 清理目标玩家的缓存
                 menuManager.clearPlayerCache(target.getUniqueId());
                 sendMessage(sender, "command.unlock.success", "player", target.getName(), "item", material);
             } catch (SQLException | ClassNotFoundException e) {

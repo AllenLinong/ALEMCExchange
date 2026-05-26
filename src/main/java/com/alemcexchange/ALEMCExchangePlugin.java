@@ -4,15 +4,19 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class ALEMCExchangePlugin extends JavaPlugin {
 
+    private PluginInitializer initializer;
+
     @Override
     public void onEnable() {
         getLogger().info("ALEMCExchange Plugin enabled!");
-        // 初始化插件
-        new PluginInitializer(this);
+        initializer = new PluginInitializer(this);
     }
 
     @Override
     public void onDisable() {
+        if (initializer != null) {
+            initializer.shutdown();
+        }
         getLogger().info("ALEMCExchange Plugin disabled!");
     }
 

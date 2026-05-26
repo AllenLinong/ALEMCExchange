@@ -3,6 +3,7 @@ package com.alemcexchange.listener;
 import com.alemcexchange.config.ConfigManager;
 import com.alemcexchange.database.DatabaseManager;
 import com.alemcexchange.util.ColorUtil;
+import com.alemcexchange.util.SchedulerUtil;
 import org.bukkit.Material;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
@@ -15,8 +16,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerPickupItemListener implements Listener {
@@ -24,14 +23,16 @@ public class PlayerPickupItemListener implements Listener {
     private final JavaPlugin plugin;
     private final ConfigManager configManager;
     private final DatabaseManager databaseManager;
+    private final SchedulerUtil schedulerUtil;
     private com.alemcexchange.util.MenuManager menuManager;
     private final ConcurrentHashMap<String, Boolean> autoSellCache = new ConcurrentHashMap<>();
-    private final Map<Player, Map<Material, Integer>> pickupCounters = new HashMap<>();
+    private final ConcurrentHashMap<Player, ConcurrentHashMap<Material, Integer>> pickupCounters = new ConcurrentHashMap<>();
 
     public PlayerPickupItemListener(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager) {
         this.plugin = plugin;
         this.configManager = configManager;
         this.databaseManager = databaseManager;
+        this.schedulerUtil = new SchedulerUtil(plugin);
     }
 
     public void setMenuManager(com.alemcexchange.util.MenuManager menuManager) {
@@ -65,7 +66,7 @@ public class PlayerPickupItemListener implements Listener {
             return;
         }
 
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        schedulerUtil.runTaskLater(() -> {
             if (!player.isOnline()) {
                 return;
             }
@@ -75,7 +76,7 @@ public class PlayerPickupItemListener implements Listener {
                 return;
             }
 
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            schedulerUtil.runAsync(() -> {
                 try {
                     boolean isAutoSellEnabledForPlayer = isAutoSellEnabled(player);
                     if (!isAutoSellEnabledForPlayer) {
@@ -85,17 +86,14 @@ public class PlayerPickupItemListener implements Listener {
                     if (databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
                         int batchThreshold = configManager.getConfig().getInt("autosell.batch_threshold", 64);
 
-                        synchronized (pickupCounters) {
-                            pickupCounters.computeIfAbsent(player, k -> new HashMap<>());
-                            Map<Material, Integer> playerCounters = pickupCounters.get(player);
-                            int currentCount = playerCounters.getOrDefault(material, 0);
-                            int newCount = currentCount + amount;
-                            playerCounters.put(material, newCount);
+                        ConcurrentHashMap<Material, Integer> playerCounters = pickupCounters.computeIfAbsent(player, k -> new ConcurrentHashMap<>());
+                        int currentCount = playerCounters.getOrDefault(material, 0);
+                        int newCount = currentCount + amount;
+                        playerCounters.put(material, newCount);
 
-                            if (newCount >= batchThreshold) {
-                                processAutoSell(player, material, newCount);
-                                playerCounters.remove(material);
-                            }
+                        if (newCount >= batchThreshold) {
+                            processAutoSell(player, material, newCount);
+                            playerCounters.remove(material);
                         }
                     }
                 } catch (SQLException | ClassNotFoundException e) {
@@ -108,8 +106,7 @@ public class PlayerPickupItemListener implements Listener {
     private void processAutoSell(Player player, Material material, int amount) {
         String materialName = material.name();
 
-        // 同步从玩家背包中移除物品
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        schedulerUtil.runTask(() -> {
             int removed = removeItemsFromInventory(player, material, amount);
 
             if (removed == 0) {
@@ -117,18 +114,15 @@ public class PlayerPickupItemListener implements Listener {
                 return;
             }
 
-            // 异步处理出售逻辑
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            schedulerUtil.runAsync(() -> {
                 try {
                     double emcPerItem = configManager.getItems().getDouble("items." + materialName + ".emc");
 
-                    // 验证EMC价格是否有效
                     if (emcPerItem <= 0) {
                         plugin.getLogger().warning("Invalid EMC price for " + materialName + ": " + emcPerItem);
                         return;
                     }
 
-                    // 使用实际移除的数量来计算积分
                     double totalEMC = emcPerItem * removed;
 
                     double taxRate = configManager.getConfig().getDouble("sell_tax", 0.05);
@@ -143,22 +137,19 @@ public class PlayerPickupItemListener implements Listener {
                     double tax = totalEMC * taxRate;
                     double netEMC = totalEMC - tax;
 
-                    // 执行数据库操作
                     databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
                     databaseManager.addSellProgress(player.getUniqueId(), materialName, removed);
-                    // 清理进度缓存
                     if (menuManager != null) {
                         menuManager.clearPlayerCache(player.getUniqueId());
                     }
                     checkUnlock(player, materialName);
 
-                    // 清理自动出售缓存
                     autoSellCache.remove(player.getUniqueId().toString());
 
                     if (configManager.isAutoSellMessageEnabled()) {
                         String message = configManager.getLang().getString("prefix") +
                                 configManager.getLang().getString("autosell.sold").replace("{amount}", String.format("%.2f", netEMC));
-                        plugin.getServer().getScheduler().runTask(plugin, () -> {
+                        schedulerUtil.runTask(() -> {
                             player.sendMessage(ColorUtil.translateColorCodes(message));
                         });
                     }
@@ -169,12 +160,11 @@ public class PlayerPickupItemListener implements Listener {
         });
     }
 
-    // 从玩家背包中移除指定数量的物品
     private int removeItemsFromInventory(Player player, Material material, int amount) {
         int removed = 0;
         ItemStack[] inventory = player.getInventory().getContents();
 
-        for (int i = 0; i < 36 && removed < amount; i++) { // 只遍历主背包36格
+        for (int i = 0; i < 36 && removed < amount; i++) {
             ItemStack item = inventory[i];
             if (item != null && item.getType() == material) {
                 int itemAmount = item.getAmount();
@@ -198,55 +188,47 @@ public class PlayerPickupItemListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
 
-        // 处理玩家退出时计数器中未出售的物品
-        synchronized (pickupCounters) {
-            Map<Material, Integer> playerCounters = pickupCounters.get(player);
-            if (playerCounters != null && !playerCounters.isEmpty()) {
-                // 在玩家还在线时，先计算好税率（因为异步任务中权限检查可能失败）
-                double taxRate = configManager.getConfig().getDouble("sell_tax", 0.05);
-                if (player.hasPermission("alemcexchange.notax")) {
-                    taxRate = 0.0;
-                } else if (player.hasPermission("alemcexchange.premium")) {
-                    taxRate = configManager.getConfig().getDouble("tax_rates.alemcexchange.premium", 0.01);
-                } else if (player.hasPermission("alemcexchange.vip")) {
-                    taxRate = configManager.getConfig().getDouble("tax_rates.alemcexchange.vip", 0.03);
-                }
-                final double finalTaxRate = taxRate;
+        ConcurrentHashMap<Material, Integer> playerCounters = pickupCounters.get(player);
+        if (playerCounters != null && !playerCounters.isEmpty()) {
+            double taxRate = configManager.getConfig().getDouble("sell_tax", 0.05);
+            if (player.hasPermission("alemcexchange.notax")) {
+                taxRate = 0.0;
+            } else if (player.hasPermission("alemcexchange.premium")) {
+                taxRate = configManager.getConfig().getDouble("tax_rates.alemcexchange.premium", 0.01);
+            } else if (player.hasPermission("alemcexchange.vip")) {
+                taxRate = configManager.getConfig().getDouble("tax_rates.alemcexchange.vip", 0.03);
+            }
+            final double finalTaxRate = taxRate;
 
-                // 从背包中移除物品并出售
-                for (Map.Entry<Material, Integer> entry : playerCounters.entrySet()) {
-                    Material material = entry.getKey();
-                    int amount = entry.getValue();
+            for (java.util.Map.Entry<Material, Integer> entry : playerCounters.entrySet()) {
+                Material material = entry.getKey();
+                int amount = entry.getValue();
 
-                    // 从背包中移除物品
-                    int removed = removeItemsFromInventory(player, material, amount);
+                int removed = removeItemsFromInventory(player, material, amount);
 
-                    if (removed > 0) {
-                        // 异步处理出售
-                        final int finalRemoved = removed;
-                        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-                            try {
-                                double emcPerItem = configManager.getItems().getDouble("items." + material.name() + ".emc");
-                                double totalEMC = emcPerItem * finalRemoved;
+                if (removed > 0) {
+                    final int finalRemoved = removed;
+                    schedulerUtil.runAsync(() -> {
+                        try {
+                            double emcPerItem = configManager.getItems().getDouble("items." + material.name() + ".emc");
+                            double totalEMC = emcPerItem * finalRemoved;
 
-                                double tax = totalEMC * finalTaxRate;
-                                double netEMC = totalEMC - tax;
+                            double tax = totalEMC * finalTaxRate;
+                            double netEMC = totalEMC - tax;
 
-                                databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
-                                databaseManager.addSellProgress(player.getUniqueId(), material.name(), finalRemoved);
+                            databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
+                            databaseManager.addSellProgress(player.getUniqueId(), material.name(), finalRemoved);
 
-                                plugin.getLogger().info("Auto-sold " + finalRemoved + " " + material.name() + " for player " + player.getName() + " on quit: " + netEMC + " EMC (tax rate: " + (finalTaxRate * 100) + "%)");
-                            } catch (SQLException | ClassNotFoundException e) {
-                                plugin.getLogger().severe("Error processing auto sell on quit: " + e.getMessage());
-                            }
-                        });
-                    }
+                            plugin.getLogger().info("Auto-sold " + finalRemoved + " " + material.name() + " for player " + player.getName() + " on quit: " + netEMC + " EMC (tax rate: " + (finalTaxRate * 100) + "%)");
+                        } catch (SQLException | ClassNotFoundException e) {
+                            plugin.getLogger().severe("Error processing auto sell on quit: " + e.getMessage());
+                        }
+                    });
                 }
             }
-
-            // 清理玩家的拾取计数器，防止内存泄漏
-            pickupCounters.remove(player);
         }
+
+        pickupCounters.remove(player);
     }
 
     private boolean isAutoSellEnabled(Player player) {
@@ -269,7 +251,6 @@ public class PlayerPickupItemListener implements Listener {
         int requiredMine = configManager.getItems().getInt("items." + materialName + ".required_mine");
         int requiredSell = configManager.getItems().getInt("items." + materialName + ".required_sell");
 
-        // 先清理缓存，确保获取最新的进度数据
         if (menuManager != null) {
             menuManager.clearPlayerCache(player.getUniqueId());
         }
@@ -282,14 +263,13 @@ public class PlayerPickupItemListener implements Listener {
 
         if (mineCondition && sellCondition && !databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
             databaseManager.unlockItem(player.getUniqueId(), materialName);
-            // 解锁后再次清理缓存
             if (menuManager != null) {
                 menuManager.clearPlayerCache(player.getUniqueId());
             }
             String itemDisplayName = configManager.getItems().getString("items." + materialName + ".name", materialName);
             String message = configManager.getLang().getString("prefix") +
                     configManager.getLang().getString("mine.unlocked").replace("{item}", itemDisplayName);
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            schedulerUtil.runTask(() -> {
                 player.sendMessage(ColorUtil.translateColorCodes(message));
             });
         }

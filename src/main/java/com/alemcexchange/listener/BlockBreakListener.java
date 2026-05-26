@@ -11,10 +11,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import java.util.HashMap;
-import java.util.Map;
-
 import java.sql.SQLException;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class BlockBreakListener implements Listener {
 
@@ -23,7 +21,7 @@ public class BlockBreakListener implements Listener {
     private final DatabaseManager databaseManager;
     private final SchedulerUtil schedulerUtil;
     private com.alemcexchange.util.MenuManager menuManager;
-    private final Map<BlockLocation, Long> playerPlacedBlocks = new HashMap<>();
+    private final ConcurrentHashMap<BlockLocation, Long> playerPlacedBlocks = new ConcurrentHashMap<>();
     private static final long BLOCK_EXPIRY_TIME = 30 * 60 * 1000;
 
     public BlockBreakListener(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager) {
@@ -39,10 +37,10 @@ public class BlockBreakListener implements Listener {
     }
 
     private void startCleanupTask() {
-        schedulerUtil.runAsync(() -> {
+        schedulerUtil.runTimerAsync(() -> {
             long currentTime = System.currentTimeMillis();
             playerPlacedBlocks.entrySet().removeIf(entry -> currentTime - entry.getValue() > BLOCK_EXPIRY_TIME);
-        });
+        }, 30 * 60 * 20L, 30 * 60 * 20L);
     }
 
     @EventHandler
@@ -105,7 +103,7 @@ public class BlockBreakListener implements Listener {
             String itemDisplayName = configManager.getItems().getString("items." + materialName + ".name", materialName);
             final String message = configManager.getLang().getString("prefix") + 
                     configManager.getLang().getString("mine.unlocked").replace("{item}", itemDisplayName);
-            schedulerUtil.runSync(player, () -> {
+            schedulerUtil.runTask(() -> {
                 player.sendMessage(ColorUtil.translateColorCodes(message));
             });
         }
