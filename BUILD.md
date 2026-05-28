@@ -6,7 +6,7 @@
 
 在开始之前，确保你已经安装了以下软件：
 
-1. **Java Development Kit (JDK)** 17 或更高版本
+1. **Java Development Kit (JDK)** 21 或更高版本
    - 下载链接：[Oracle JDK](https://www.oracle.com/java/technologies/downloads/) 或 [OpenJDK](https://openjdk.org/)
    - 安装后请确保 `java` 和 `javac` 命令在系统 PATH 中
 
@@ -23,10 +23,7 @@
 ### 方法 A：克隆仓库（推荐）
 
 ```bash
-# 克隆仓库
-git clone https://github.com/yourusername/ALEMCExchange.git
-
-# 进入目录
+git clone https://github.com/AllenLinong/ALEMCExchange.git
 cd ALEMCExchange
 ```
 
@@ -57,8 +54,7 @@ mvn clean package -DskipTests
 
 构建成功后，JAR 文件会生成在 `target` 目录中：
 
-- `target/ALEMCExchange-1.1.2.jar` - 主插件文件
-- `target/original-ALEMCExchange-1.1.2.jar` - 未混淆的 JAR 文件（用于调试）
+- `target/ALEMCExchange-1.1.4.jar` - 主插件文件
 
 ## 步骤 4：安装插件
 
@@ -83,7 +79,7 @@ mvn clean package -DskipTests
 
 如果构建失败，请检查：
 
-1. **JDK 版本**：确保使用 JDK 17 或更高版本
+1. **JDK 版本**：确保使用 JDK 21 或更高版本
 2. **Maven 版本**：确保使用 Maven 3.6.0 或更高版本
 3. **网络连接**：Maven 需要下载依赖，确保网络连接正常
 4. **依赖冲突**：检查是否有依赖冲突
@@ -92,7 +88,7 @@ mvn clean package -DskipTests
 
 如果插件加载失败，请检查：
 
-1. **服务器版本**：确保服务器版本与插件兼容（1.21+）
+1. **服务器版本**：确保服务器版本与插件兼容（1.21 - 1.26.1）
 2. **依赖插件**：确保安装了必要的依赖插件（如 PlaceholderAPI，可选）
 3. **配置文件**：检查配置文件是否正确
 4. **错误日志**：查看服务器日志中的错误信息
@@ -149,5 +145,5 @@ mvn javadoc:javadoc
 
 如果有任何问题，请通过以下方式联系：
 
-- GitHub Issues：[ALEMCExchange Issues](https://github.com/yourusername/ALEMCExchange/issues)
-- Discord：[Discord 服务器](https://discord.gg/yourserver)
+- GitHub Issues：[ALEMCExchange Issues](https://github.com/AllenLinong/ALEMCExchange/issues)
+- QQ：[1422163791](https://qm.qq.com)

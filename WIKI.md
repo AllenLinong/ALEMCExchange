@@ -1,5 +1,8 @@
 # ALEMCExchange 插件 Wiki
 
+> **当前版本**: 1.1.4  
+> **支持版本**: Minecraft 1.21 - 1.26.1 (Spigot / Paper / Folia)
+
 ## 插件介绍
 
 ALEMCExchange 是一个 Minecraft 服务器插件，提供了 EMC（Energy Matter Covalence）系统，允许玩家通过挖掘、出售物品来获得 EMC 积分，然后使用 EMC 积分购买物品。
@@ -193,6 +196,14 @@ A: 请检查：
 ### Q: 数据库连接失败
 
 A: 请检查数据库配置，确保连接信息正确。
+
+### Q: 插件支持 Minecraft 1.26.1 吗？
+
+A: 支持！Minecraft 26.1 / 26.1.1 / 26.1.2 相比 1.21.11 没有 API 破坏性变化，插件可直接运行。注意 MC 26.1 服务端需要 Java 25+，但插件用 Java 21 编译即可兼容。
+
+### Q: 如何升级插件版本？
+
+A: 替换 JAR 文件后重启服务器即可。数据库结构兼容，无需额外迁移操作。
 
 ## 开发者 API
 

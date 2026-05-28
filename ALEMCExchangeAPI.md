@@ -10,7 +10,7 @@ ALEMCExchange 插件提供了一套API，允许其他插件与EMC系统进行联
 <dependency>
     <groupId>com.alemcexchange</groupId>
     <artifactId>ALEMCExchange</artifactId>
-    <version>1.1.2</version>
+    <version>1.1.4</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -72,6 +72,6 @@ databaseManager.unlockItem(playerUUID, "DIAMOND");
 
 ## 版本兼容性
 
-- API 1.1.2 兼容 Spigot 1.21+
+- API 1.1.4 兼容 Spigot/Paper 1.21 - 1.26.1
 - 后续版本可能会增加新的API方法，但会保持向后兼容。
 
