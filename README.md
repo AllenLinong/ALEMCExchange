@@ -1,7 +1,7 @@
 # ALEMCExchange
 
 [![Version](https://img.shields.io/badge/version-1.1.4-blue)](https://github.com/AllenLinong/ALEMCExchange/releases)
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21--1.26.1-green)](https://www.spigotmc.org/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21--26.1-green)](https://www.spigotmc.org/)
 [![Java](https://img.shields.io/badge/Java-21%2B-orange)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 [![Folia](https://img.shields.io/badge/Folia-supported-purple)](https://papermc.io/software/folia)
