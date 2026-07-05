@@ -82,3 +82,13 @@ placeholder:
   autosell:
     enabled: "开启"
     disabled: "关闭"
+  daily_limit:
+    unlimited: "无限"
+
+# 每日限额消息
+daily_limit:
+  reached: "&c你今日的EMC获取限额已用完！请明天再来。"
+  remaining: "&e今日剩余限额: &6{remaining} &e/ &6{limit} EMC"
+  limit_info: "&e今日已获取: &6{earned} &e/ &6{limit} EMC"
+  unlimited: "&a无限"
+  disabled: "&7未开启"

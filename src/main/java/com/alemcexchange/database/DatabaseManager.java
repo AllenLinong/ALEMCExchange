@@ -103,6 +103,11 @@ public class DatabaseManager {
                 "(uuid VARCHAR(36), material VARCHAR(64), " +
                 "PRIMARY KEY (uuid, material), FOREIGN KEY (uuid) REFERENCES " + tablePrefix + "players(uuid))";
 
+        // 创建每日EMC获取记录表
+        String createDailyEMCTable = "CREATE TABLE IF NOT EXISTS " + tablePrefix + "player_daily_emc " +
+                "(uuid VARCHAR(36), date VARCHAR(10), emc_earned DOUBLE DEFAULT 0, " +
+                "PRIMARY KEY (uuid, date), FOREIGN KEY (uuid) REFERENCES " + tablePrefix + "players(uuid))";
+
         Connection conn = getConnection();
         Statement stmt = conn.createStatement();
         try {
@@ -110,6 +115,7 @@ public class DatabaseManager {
             stmt.execute(createMineProgressTable);
             stmt.execute(createSellProgressTable);
             stmt.execute(createUnlockedItemsTable);
+            stmt.execute(createDailyEMCTable);
         } finally {
             if (stmt != null) {
                 stmt.close();
@@ -1043,6 +1049,150 @@ public class DatabaseManager {
         }
         
         return progresses;
+    }
+
+    /**
+     * 获取当前有效日期字符串（考虑重置时间）
+     * 如果当前时间早于重置时间，则属于前一天
+     */
+    public String getEffectiveDate() {
+        String resetTimeStr = configManager.getDailyLimitResetTime();
+        String[] parts = resetTimeStr.split(":");
+        int resetHour = Integer.parseInt(parts[0]);
+        int resetMinute = Integer.parseInt(parts[1]);
+
+        java.util.Calendar calendar = java.util.Calendar.getInstance();
+        int currentHour = calendar.get(java.util.Calendar.HOUR_OF_DAY);
+        int currentMinute = calendar.get(java.util.Calendar.MINUTE);
+
+        // 如果当前时间早于重置时间，属于前一天
+        if (currentHour < resetHour || (currentHour == resetHour && currentMinute < resetMinute)) {
+            calendar.add(java.util.Calendar.DAY_OF_MONTH, -1);
+        }
+
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+        return sdf.format(calendar.getTime());
+    }
+
+    /**
+     * 获取玩家今日已获得的EMC数量
+     */
+    public double getDailyEMCEarned(UUID uuid, String date) throws SQLException, ClassNotFoundException {
+        ensurePlayerExists(uuid);
+
+        String query = "SELECT emc_earned FROM " + tablePrefix + "player_daily_emc WHERE uuid = ? AND date = ?";
+
+        if (isMySQL) {
+            try (Connection conn = getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, uuid.toString());
+                stmt.setString(2, date);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getDouble("emc_earned");
+                    }
+                }
+            }
+        } else {
+            Connection conn = getConnection();
+            PreparedStatement stmt = conn.prepareStatement(query);
+            try {
+                stmt.setString(1, uuid.toString());
+                stmt.setString(2, date);
+                ResultSet rs = stmt.executeQuery();
+                try {
+                    if (rs.next()) {
+                        return rs.getDouble("emc_earned");
+                    }
+                } finally {
+                    if (rs != null) {
+                        rs.close();
+                    }
+                }
+            } finally {
+                if (stmt != null) {
+                    stmt.close();
+                }
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * 累加玩家今日已获得的EMC数量
+     */
+    public void addDailyEMCEarned(UUID uuid, String date, double amount) throws SQLException, ClassNotFoundException {
+        ensurePlayerExists(uuid);
+
+        String query;
+        if (isMySQL) {
+            query = "INSERT INTO " + tablePrefix + "player_daily_emc (uuid, date, emc_earned) VALUES (?, ?, ?) " +
+                    "ON DUPLICATE KEY UPDATE emc_earned = emc_earned + ?";
+        } else {
+            query = "INSERT INTO " + tablePrefix + "player_daily_emc (uuid, date, emc_earned) VALUES (?, ?, ?) " +
+                    "ON CONFLICT(uuid, date) DO UPDATE SET emc_earned = emc_earned + ?";
+        }
+
+        if (isMySQL) {
+            try (Connection conn = getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, uuid.toString());
+                stmt.setString(2, date);
+                stmt.setDouble(3, amount);
+                stmt.setDouble(4, amount);
+                stmt.executeUpdate();
+            }
+        } else {
+            Connection conn = getConnection();
+            PreparedStatement stmt = conn.prepareStatement(query);
+            try {
+                stmt.setString(1, uuid.toString());
+                stmt.setString(2, date);
+                stmt.setDouble(3, amount);
+                stmt.setDouble(4, amount);
+                stmt.executeUpdate();
+            } finally {
+                if (stmt != null) {
+                    stmt.close();
+                }
+            }
+        }
+    }
+
+    /**
+     * 清理过期的每日EMC记录（保留最近7天）
+     */
+    public void cleanupOldDailyEMCRecords() {
+        try {
+            java.util.Calendar calendar = java.util.Calendar.getInstance();
+            calendar.add(java.util.Calendar.DAY_OF_MONTH, -7);
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+            String cutoffDate = sdf.format(calendar.getTime());
+
+            String query = "DELETE FROM " + tablePrefix + "player_daily_emc WHERE date < ?";
+
+            if (isMySQL) {
+                try (Connection conn = getConnection();
+                     PreparedStatement stmt = conn.prepareStatement(query)) {
+                    stmt.setString(1, cutoffDate);
+                    stmt.executeUpdate();
+                }
+            } else {
+                Connection conn = getConnection();
+                PreparedStatement stmt = conn.prepareStatement(query);
+                try {
+                    stmt.setString(1, cutoffDate);
+                    stmt.executeUpdate();
+                } finally {
+                    if (stmt != null) {
+                        stmt.close();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to cleanup old daily EMC records: " + e.getMessage());
+        }
     }
 
     public void close() {

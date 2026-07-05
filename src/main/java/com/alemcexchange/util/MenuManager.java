@@ -90,9 +90,14 @@ public class MenuManager implements Listener {
 
         double balance = getCachedBalance(player.getUniqueId());
 
+        // 计算每日限额显示文本
+        String dailyLimitText = getDailyLimitDisplayText(player);
+
         List<String> sellLore = new ArrayList<>(configManager.getMenus().getStringList("menus.main.buttons.sell.lore"));
         for (int i = 0; i < sellLore.size(); i++) {
-            sellLore.set(i, sellLore.get(i).replace("%balance%", String.format("%.2f", balance)));
+            sellLore.set(i, sellLore.get(i)
+                    .replace("%balance%", String.format("%.2f", balance))
+                    .replace("%daily_limit%", dailyLimitText));
         }
         ItemStack sellItem = createMenuItem(
                 Material.valueOf(configManager.getMenus().getString("menus.main.buttons.sell.material")),
@@ -164,14 +169,7 @@ public class MenuManager implements Listener {
         inventory.setItem(configManager.getMenus().getInt("menus.sell.buttons.info.slot"), infoItem);
 
         List<String> sellLore = new ArrayList<>(configManager.getMenus().getStringList("menus.sell.buttons.sell.lore"));
-        double taxRate = configManager.getConfig().getDouble("sell_tax", 0.05);
-        if (player.hasPermission("alemcexchange.notax")) {
-            taxRate = 0.0;
-        } else if (player.hasPermission("alemcexchange.premium")) {
-            taxRate = configManager.getConfig().getDouble("tax_rates.alemcexchange.premium", 0.01);
-        } else if (player.hasPermission("alemcexchange.vip")) {
-            taxRate = configManager.getConfig().getDouble("tax_rates.alemcexchange.vip", 0.03);
-        }
+        double taxRate = configManager.getTaxRateForPlayer(player);
         sellLore.set(1, sellLore.get(1).replace("%tax%", String.format("%.1f", taxRate * 100)));
 
         ItemStack sellItem = createMenuItem(
@@ -662,19 +660,20 @@ public class MenuManager implements Listener {
         String displayName = clickedItem.getItemMeta().getDisplayName();
         String sellDisplayName = ColorUtil.translateColorCodes( configManager.getMenus().getString("menus.sell.buttons.sell.display_name"));
         String backDisplayName = ColorUtil.translateColorCodes( configManager.getMenus().getString("menus.sell.buttons.back.display_name"));
-        
+
         if (displayName.equals(sellDisplayName)) {
             final double[] totalEMC = {0};
             final List<ItemStack> returnItems = new ArrayList<>();
             final List<ItemStack> itemsToRemove = new ArrayList<>();
             final List<String> materialNames = new ArrayList<>();
             final List<Integer> amounts = new ArrayList<>();
+            final List<Double> emcPerItemList = new ArrayList<>();
 
             for (int i = 0; i < inventory.getSize(); i++) {
                 if (i < 9 || i >= 45) {
                     continue;
                 }
-                
+
                 if (i == configManager.getMenus().getInt("menus.sell.buttons.info.slot") ||
                         i == configManager.getMenus().getInt("menus.sell.buttons.sell.slot") ||
                         i == configManager.getMenus().getInt("menus.sell.buttons.back.slot")) {
@@ -690,6 +689,7 @@ public class MenuManager implements Listener {
                         totalEMC[0] += emcPerItem * amount;
                         materialNames.add(materialName);
                         amounts.add(amount);
+                        emcPerItemList.add(emcPerItem);
                         itemsToRemove.add(item);
                     } else {
                         returnItems.add(item);
@@ -702,25 +702,120 @@ public class MenuManager implements Listener {
                 final double finalTotalEMC = totalEMC[0];
                 final List<String> finalMaterialNames = materialNames;
                 final List<Integer> finalAmounts = amounts;
-                
-                schedulerUtil.runAsync(() -> {
-                    double taxRate = configManager.getConfig().getDouble("sell_tax", 0.05);
-                    if (player.hasPermission("alemcexchange.notax")) {
-                        taxRate = 0.0;
-                    } else if (player.hasPermission("alemcexchange.premium")) {
-                        taxRate = configManager.getConfig().getDouble("tax_rates.alemcexchange.premium", 0.01);
-                    } else if (player.hasPermission("alemcexchange.vip")) {
-                        taxRate = configManager.getConfig().getDouble("tax_rates.alemcexchange.vip", 0.03);
-                    }
+                final List<Double> finalEmcPerItemList = emcPerItemList;
 
-                    double tax = finalTotalEMC * taxRate;
-                    final double netEMC = finalTotalEMC - tax;
+                schedulerUtil.runAsync(() -> {
+                    double taxRate = configManager.getTaxRateForPlayer(player);
 
                     try {
+                        // 计算实际可获得的EMC（考虑每日限制）
+                        double allowedEMC = finalTotalEMC;
+                        List<Integer> actualAmounts = new ArrayList<>(finalAmounts);
+
+                        if (configManager.isDailyLimitEnabled()) {
+                            double dailyLimit = configManager.getDailyLimitForPlayer(player);
+                            if (dailyLimit != -1) { // -1 表示无限制
+                                String effectiveDate = databaseManager.getEffectiveDate();
+                                double alreadyEarned = databaseManager.getDailyEMCEarned(player.getUniqueId(), effectiveDate);
+                                double remaining = dailyLimit - alreadyEarned;
+
+                                if (remaining <= 0) {
+                                    // 今日限额已用完，全部返回
+                                    allowedEMC = 0;
+                                } else if (remaining < finalTotalEMC) {
+                                    // 部分超出限额，计算实际可出售数量
+                                    allowedEMC = 0;
+                                    actualAmounts.clear();
+                                    double remainingLimit = remaining;
+
+                                    for (int i = 0; i < finalMaterialNames.size(); i++) {
+                                        double itemTotalEMC = finalEmcPerItemList.get(i) * finalAmounts.get(i);
+                                        if (itemTotalEMC <= remainingLimit) {
+                                            // 该物品可全部出售
+                                            allowedEMC += itemTotalEMC;
+                                            actualAmounts.add(finalAmounts.get(i));
+                                            remainingLimit -= itemTotalEMC;
+                                        } else if (remainingLimit > 0) {
+                                            // 只能出售部分
+                                            int sellableAmount = (int) (remainingLimit / finalEmcPerItemList.get(i));
+                                            if (sellableAmount > 0) {
+                                                double sellableEMC = sellableAmount * finalEmcPerItemList.get(i);
+                                                allowedEMC += sellableEMC;
+                                                actualAmounts.add(sellableAmount);
+                                                remainingLimit -= sellableEMC;
+
+                                                // 返回剩余物品
+                                                final int unsoldAmount = finalAmounts.get(i) - sellableAmount;
+                                                final Material material = Material.valueOf(finalMaterialNames.get(i));
+                                                final ItemStack unsoldItem = new ItemStack(material, unsoldAmount);
+                                                schedulerUtil.runTask(() -> {
+                                                    Map<Integer, ItemStack> leftover = player.getInventory().addItem(unsoldItem);
+                                                    for (ItemStack leftoverItem : leftover.values()) {
+                                                        player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
+                                                    }
+                                                });
+                                            } else {
+                                                // 连1个都卖不了，全部返回
+                                                actualAmounts.add(0);
+                                                final ItemStack unsoldItem = new ItemStack(
+                                                    Material.valueOf(finalMaterialNames.get(i)), finalAmounts.get(i));
+                                                schedulerUtil.runTask(() -> {
+                                                    Map<Integer, ItemStack> leftover = player.getInventory().addItem(unsoldItem);
+                                                    for (ItemStack leftoverItem : leftover.values()) {
+                                                        player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
+                                                    }
+                                                });
+                                            }
+                                        } else {
+                                            // 限额用完，全部返回
+                                            actualAmounts.add(0);
+                                            final ItemStack unsoldItem = new ItemStack(
+                                                Material.valueOf(finalMaterialNames.get(i)), finalAmounts.get(i));
+                                            schedulerUtil.runTask(() -> {
+                                                Map<Integer, ItemStack> leftover = player.getInventory().addItem(unsoldItem);
+                                                for (ItemStack leftoverItem : leftover.values()) {
+                                                    player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (allowedEMC <= 0) {
+                            // 限额已用完，提示玩家并返回所有物品
+                            schedulerUtil.runTask(() -> {
+                                String message = configManager.getLang().getString("prefix") +
+                                        configManager.getLang().getString("daily_limit.reached");
+                                player.sendMessage(ColorUtil.translateColorCodes(message));
+                                // 将所有已移除的物品退回给玩家
+                                for (ItemStack item : itemsToRemove) {
+                                    Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
+                                    for (ItemStack leftoverItem : leftover.values()) {
+                                        player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
+                                    }
+                                }
+                            });
+                            return;
+                        }
+
+                        double tax = allowedEMC * taxRate;
+                        final double netEMC = allowedEMC - tax;
+                        final double finalAllowedEMC = allowedEMC;
+
+                        // 记录每日获取量（使用税前EMC，避免税率导致小数零头）
+                        if (configManager.isDailyLimitEnabled()) {
+                            String effectiveDate = databaseManager.getEffectiveDate();
+                            databaseManager.addDailyEMCEarned(player.getUniqueId(), effectiveDate, finalAllowedEMC);
+                        }
+
                         for (int i = 0; i < finalMaterialNames.size(); i++) {
                             String materialName = finalMaterialNames.get(i);
-                            int amount = finalAmounts.get(i);
-                            
+                            int amount = actualAmounts.get(i);
+
+                            if (amount <= 0) continue;
+
                             if (!databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
                                 int requiredSell = configManager.getItems().getInt("items." + materialName + ".required_sell");
                                 if (requiredSell > 0) {
@@ -735,11 +830,11 @@ public class MenuManager implements Listener {
                         }
 
                         databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
-                        
+
                         schedulerUtil.runTask(() -> {
-                            String message = configManager.getLang().getString("prefix") + 
+                            String message = configManager.getLang().getString("prefix") +
                                     configManager.getLang().getString("menu.sell.success").replace("{amount}", String.format("%.2f", netEMC));
-                            player.sendMessage(ColorUtil.translateColorCodes( message));
+                            player.sendMessage(ColorUtil.translateColorCodes(message));
                         });
                     } catch (SQLException | ClassNotFoundException e) {
                         schedulerUtil.runTask(() -> {
@@ -999,6 +1094,29 @@ public class MenuManager implements Listener {
         }
     }
     
+    /**
+     * 获取玩家每日剩余额度的显示文本
+     */
+    private String getDailyLimitDisplayText(Player player) {
+        if (!configManager.isDailyLimitEnabled()) {
+            return configManager.getLang().getString("daily_limit.unlimited", "&a无限");
+        }
+
+        double dailyLimit = configManager.getDailyLimitForPlayer(player);
+        if (dailyLimit == -1) {
+            return configManager.getLang().getString("daily_limit.unlimited", "&a无限");
+        }
+
+        try {
+            String effectiveDate = databaseManager.getEffectiveDate();
+            double earnedToday = databaseManager.getDailyEMCEarned(player.getUniqueId(), effectiveDate);
+            double remaining = Math.max(0, dailyLimit - earnedToday);
+            return "&6" + String.format("%.0f", remaining);
+        } catch (Exception e) {
+            return configManager.getLang().getString("daily_limit.unlimited", "&a无限");
+        }
+    }
+
     public void clearPlayerCache(UUID playerUUID) {
         playerBalanceCache.remove(playerUUID);
         playerUnlockedCache.remove(playerUUID);

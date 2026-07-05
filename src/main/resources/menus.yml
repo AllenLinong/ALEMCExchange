@@ -20,7 +20,8 @@ menus:
         lore:  # 按钮悬停描述
           - "&7点击打开出售菜单"
           - "&7将物品放入并出售获得EMC"
-          - "&7当前EMC: &6%balance%" 
+          - "&7当前EMC: &6%balance%"
+          - "&7每日剩余额度: %daily_limit%"  # 未开启或无限时显示"无限"
       exchange:  # 兑换物品按钮
         slot: 13  # 按钮位置（第二行第五格）
         material: DIAMOND  # 按钮材质

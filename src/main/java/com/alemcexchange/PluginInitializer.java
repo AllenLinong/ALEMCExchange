@@ -50,7 +50,23 @@ public class PluginInitializer {
             plugin.getLogger().info("PlaceholderAPI expansion registered!");
         }
 
+        // 启动每日EMC记录清理任务（每30分钟检查一次）
+        startDailyCleanupTask();
+
         plugin.getLogger().info("ALEMCExchange Plugin initialized successfully!");
+    }
+
+    /**
+     * 启动每日EMC记录清理任务，定期清理过期记录
+     */
+    private void startDailyCleanupTask() {
+        schedulerUtil.runTimerAsync(() -> {
+            try {
+                databaseManager.cleanupOldDailyEMCRecords();
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to cleanup daily EMC records: " + e.getMessage());
+            }
+        }, 30 * 60 * 20L, 30 * 60 * 20L); // 每30分钟执行一次
     }
 
     public void shutdown() {

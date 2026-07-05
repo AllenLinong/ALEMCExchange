@@ -41,6 +41,16 @@ autosell:
   send_message: true  # 自动出售时是否发送提示消息
   batch_threshold: 64  # 批量出售阈值，达到此数量才自动出售
 
+# 每日EMC获取限制
+daily_limit:
+  enabled: false  # 是否开启每日EMC获取限制
+  reset_time: "00:00"  # 每日重置时间（服务器时间，格式 HH:mm）
+  default_limit: 10000  # 默认每日EMC获取上限（无特殊权限的玩家）
+  permissions:  # 不同权限的每日EMC获取上限，-1表示不限制
+    alemcexchange.daily.vip: 50000
+    alemcexchange.daily.premium: 100000
+    alemcexchange.daily.unlimited: -1
+
 # 权限说明
 # alemcexchange.use - 基础使用权限（默认所有玩家拥有）
 # alemcexchange.admin - 管理员权限，用于执行reload、give命令和解锁其他玩家的所有物品
@@ -49,3 +59,6 @@ autosell:
 # alemcexchange.vip - VIP权限，3%税率
 # alemcexchange.premium - 高级用户权限，1%税率
 # alemcexchange.unlockall.auto - 自动解锁所有物品（无需执行命令）
+# alemcexchange.daily.vip - VIP每日限额权限
+# alemcexchange.daily.premium - 高级用户每日限额权限
+# alemcexchange.daily.unlimited - 无限每日限额权限

@@ -323,16 +323,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 return;
             }
 
-            double taxRate = configManager.getTaxRate("alemcexchange.notax");
-            if (!player.hasPermission("alemcexchange.notax")) {
-                if (player.hasPermission("alemcexchange.premium")) {
-                    taxRate = configManager.getTaxRate("alemcexchange.premium");
-                } else if (player.hasPermission("alemcexchange.vip")) {
-                    taxRate = configManager.getTaxRate("alemcexchange.vip");
-                } else {
-                    taxRate = configManager.getConfig().getDouble("sell_tax", 0.05);
-                }
-            }
+            double taxRate = configManager.getTaxRateForPlayer(player);
 
             double tax = amount * taxRate;
             double netAmount = amount - tax;

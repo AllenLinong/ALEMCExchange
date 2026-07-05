@@ -70,6 +70,51 @@ public class ALEMCExchangeExpansion extends PlaceholderExpansion {
                 case "autosell_bool":
                     boolean autoSellBool = databaseManager.isAutoSellEnabled(uuid);
                     return String.valueOf(autoSellBool);
+                case "daily_earned":
+                    // 今日已获取EMC
+                    if (configManager.isDailyLimitEnabled()) {
+                        String effectiveDate = databaseManager.getEffectiveDate();
+                        double earned = databaseManager.getDailyEMCEarned(uuid, effectiveDate);
+                        return String.format("%.2f", earned);
+                    }
+                    return "0.00";
+                case "daily_earned_int":
+                    // 今日已获取EMC（整数）
+                    if (configManager.isDailyLimitEnabled()) {
+                        String effectiveDate = databaseManager.getEffectiveDate();
+                        double earnedInt = databaseManager.getDailyEMCEarned(uuid, effectiveDate);
+                        return String.valueOf((int) earnedInt);
+                    }
+                    return "0";
+                case "daily_limit":
+                    // 每日限额
+                    if (configManager.isDailyLimitEnabled()) {
+                        org.bukkit.entity.Player player = org.bukkit.Bukkit.getPlayer(uuid);
+                        if (player != null) {
+                            double limit = configManager.getDailyLimitForPlayer(player);
+                            if (limit == -1) {
+                                return configManager.getLang().getString("placeholder.daily_limit.unlimited", "无限");
+                            }
+                            return String.format("%.2f", limit);
+                        }
+                    }
+                    return "0.00";
+                case "daily_remaining":
+                    // 今日剩余限额
+                    if (configManager.isDailyLimitEnabled()) {
+                        org.bukkit.entity.Player player = org.bukkit.Bukkit.getPlayer(uuid);
+                        if (player != null) {
+                            double limit = configManager.getDailyLimitForPlayer(player);
+                            if (limit == -1) {
+                                return configManager.getLang().getString("placeholder.daily_limit.unlimited", "无限");
+                            }
+                            String effectiveDate = databaseManager.getEffectiveDate();
+                            double earned = databaseManager.getDailyEMCEarned(uuid, effectiveDate);
+                            double remaining = Math.max(0, limit - earned);
+                            return String.format("%.2f", remaining);
+                        }
+                    }
+                    return "0.00";
                 default:
                     return "";
             }
