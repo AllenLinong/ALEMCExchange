@@ -21,6 +21,8 @@ import java.util.Set;
 
 public class CommandManager implements CommandExecutor, TabCompleter {
 
+    private static final double DAILY_LIMIT_EPSILON = 0.0000001;
+
     private final JavaPlugin plugin;
     private final ConfigManager configManager;
     private final DatabaseManager databaseManager;
@@ -279,6 +281,16 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         try {
             boolean currentState = databaseManager.isAutoSellEnabled(player.getUniqueId());
             boolean newState = !currentState;
+
+            if (newState && !hasDailyLimitRemaining(player)) {
+                String message = configManager.getLang().getString("prefix") +
+                        configManager.getLang().getString(
+                                "autosell.no_daily_limit",
+                                "&c今日EMC获取额度已用完，无法启用自动出售功能。");
+                player.sendMessage(ColorUtil.translateColorCodes(message));
+                return;
+            }
+
             databaseManager.setAutoSellEnabled(player.getUniqueId(), newState);
             playerPickupItemListener.refreshAutoSellCache();
             String message = configManager.getLang().getString("prefix") + 
@@ -288,6 +300,21 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             sendMessage(player, "command.operation-failed");
             plugin.getLogger().severe("Error toggling autosell: " + e.getMessage());
         }
+    }
+
+    private boolean hasDailyLimitRemaining(Player player) throws SQLException, ClassNotFoundException {
+        if (!configManager.isDailyLimitEnabled()) {
+            return true;
+        }
+
+        double dailyLimit = configManager.getDailyLimitForPlayer(player);
+        if (dailyLimit == -1) {
+            return true;
+        }
+
+        String effectiveDate = databaseManager.getEffectiveDate();
+        double earnedToday = databaseManager.getDailyEMCEarned(player.getUniqueId(), effectiveDate);
+        return dailyLimit - earnedToday > DAILY_LIMIT_EPSILON;
     }
 
     private void handleTransferCommand(Player player, String[] args) {

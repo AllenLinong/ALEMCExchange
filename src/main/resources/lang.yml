@@ -67,6 +67,8 @@ autosell:
   enabled: "&a自动出售已开启！"
   disabled: "&c自动出售已关闭！"
   sold: "&a自动出售: &6{amount} EMC"
+  disabled_daily_limit: "&c今日EMC获取额度已用完，自动出售已关闭！"
+  no_daily_limit: "&c今日EMC获取额度已用完，无法启用自动出售功能。"
 
 # 挖掘消息
 mine:

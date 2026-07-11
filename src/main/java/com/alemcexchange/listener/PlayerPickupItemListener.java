@@ -23,6 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerPickupItemListener implements Listener {
 
+    private static final double DAILY_LIMIT_EPSILON = 0.0000001;
+
     private final JavaPlugin plugin;
     private final ConfigManager configManager;
     private final DatabaseManager databaseManager;
@@ -86,6 +88,11 @@ public class PlayerPickupItemListener implements Listener {
                         return;
                     }
 
+                    if (!hasDailyLimitRemaining(player)) {
+                        disableAutoSellForDailyLimit(player);
+                        return;
+                    }
+
                     if (databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
                         int batchThreshold = configManager.getConfig().getInt("autosell.batch_threshold", 64);
 
@@ -133,6 +140,7 @@ public class PlayerPickupItemListener implements Listener {
                     double allowedEMC = totalEMC;
                     int actualSold = finalRemoved;
                     boolean limited = false;
+                    double remainingAfterSell = Double.MAX_VALUE;
 
                     if (configManager.isDailyLimitEnabled()) {
                         double dailyLimit = configManager.getDailyLimitForPlayer(player);
@@ -141,7 +149,7 @@ public class PlayerPickupItemListener implements Listener {
                             double alreadyEarned = databaseManager.getDailyEMCEarned(player.getUniqueId(), effectiveDate);
                             double remaining = dailyLimit - alreadyEarned;
 
-                            if (remaining <= 0) {
+                            if (remaining <= DAILY_LIMIT_EPSILON) {
                                 // 今日限额已用完，退还物品
                                 final ItemStack returnItem = new ItemStack(material, finalRemoved);
                                 schedulerUtil.runTask(() -> {
@@ -149,10 +157,8 @@ public class PlayerPickupItemListener implements Listener {
                                     for (ItemStack leftoverItem : leftover.values()) {
                                         player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
                                     }
-                                    String message = configManager.getLang().getString("prefix") +
-                                            configManager.getLang().getString("daily_limit.reached");
-                                    player.sendMessage(ColorUtil.translateColorCodes(message));
                                 });
+                                disableAutoSellForDailyLimit(player);
                                 return;
                             } else if (remaining < totalEMC) {
                                 // 部分超出限额
@@ -182,6 +188,8 @@ public class PlayerPickupItemListener implements Listener {
                                 });
                                 limited = true;
                             }
+
+                            remainingAfterSell = remaining - allowedEMC;
                         }
                     }
 
@@ -206,6 +214,7 @@ public class PlayerPickupItemListener implements Listener {
                     autoSellCache.remove(player.getUniqueId().toString());
 
                     final boolean wasLimited = limited;
+                    final boolean shouldDisableAfterSell = remainingAfterSell <= DAILY_LIMIT_EPSILON;
                     if (configManager.isAutoSellMessageEnabled()) {
                         String message = configManager.getLang().getString("prefix") +
                                 configManager.getLang().getString("autosell.sold").replace("{amount}", String.format("%.2f", netEMC));
@@ -227,6 +236,9 @@ public class PlayerPickupItemListener implements Listener {
                                 } catch (Exception ignored) {}
                             }
                         });
+                    }
+                    if (shouldDisableAfterSell) {
+                        disableAutoSellForDailyLimit(player);
                     }
                 } catch (SQLException | ClassNotFoundException e) {
                     plugin.getLogger().severe("Error processing auto sell: " + e.getMessage());
@@ -416,6 +428,41 @@ public class PlayerPickupItemListener implements Listener {
 
     public void refreshAutoSellCache() {
         autoSellCache.clear();
+    }
+
+    private boolean hasDailyLimitRemaining(Player player) throws SQLException, ClassNotFoundException {
+        if (!configManager.isDailyLimitEnabled()) {
+            return true;
+        }
+
+        double dailyLimit = configManager.getDailyLimitForPlayer(player);
+        if (dailyLimit == -1) {
+            return true;
+        }
+
+        String effectiveDate = databaseManager.getEffectiveDate();
+        double earnedToday = databaseManager.getDailyEMCEarned(player.getUniqueId(), effectiveDate);
+        return dailyLimit - earnedToday > DAILY_LIMIT_EPSILON;
+    }
+
+    private void disableAutoSellForDailyLimit(Player player) {
+        try {
+            databaseManager.setAutoSellEnabled(player.getUniqueId(), false);
+            autoSellCache.put(player.getUniqueId().toString(), false);
+            pickupCounters.remove(player);
+
+            if (player.isOnline()) {
+                schedulerUtil.runTask(() -> {
+                    String message = configManager.getLang().getString("prefix") +
+                            configManager.getLang().getString(
+                                    "autosell.disabled_daily_limit",
+                                    "&c今日EMC获取额度已用完，自动出售已关闭！");
+                    player.sendMessage(ColorUtil.translateColorCodes(message));
+                });
+            }
+        } catch (SQLException | ClassNotFoundException e) {
+            plugin.getLogger().severe("Error disabling auto sell after reaching daily limit: " + e.getMessage());
+        }
     }
 
     private void checkUnlock(Player player, String materialName) throws SQLException, ClassNotFoundException {

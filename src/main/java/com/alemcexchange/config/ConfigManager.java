@@ -112,6 +112,14 @@ public class ConfigManager {
             lang.set("daily_limit.disabled", "&7未开启");
             langChanged = true;
         }
+        if (!lang.contains("autosell.disabled_daily_limit")) {
+            lang.set("autosell.disabled_daily_limit", "&c今日EMC获取额度已用完，自动出售已关闭！");
+            langChanged = true;
+        }
+        if (!lang.contains("autosell.no_daily_limit")) {
+            lang.set("autosell.no_daily_limit", "&c今日EMC获取额度已用完，无法启用自动出售功能。");
+            langChanged = true;
+        }
         // 命令
         if (!lang.contains("command.unlock.usage")) {
             lang.set("command.unlock.usage", "&c用法: /alex unlock <玩家> <物品ID>");

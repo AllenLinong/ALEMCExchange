@@ -690,9 +690,9 @@ public class MenuManager implements Listener {
                         materialNames.add(materialName);
                         amounts.add(amount);
                         emcPerItemList.add(emcPerItem);
-                        itemsToRemove.add(item);
+                        itemsToRemove.add(item.clone());
                     } else {
-                        returnItems.add(item);
+                        returnItems.add(item.clone());
                     }
                     inventory.setItem(i, null);
                 }
@@ -746,36 +746,25 @@ public class MenuManager implements Listener {
 
                                                 // 返回剩余物品
                                                 final int unsoldAmount = finalAmounts.get(i) - sellableAmount;
-                                                final Material material = Material.valueOf(finalMaterialNames.get(i));
-                                                final ItemStack unsoldItem = new ItemStack(material, unsoldAmount);
+                                                final ItemStack unsoldItem = itemsToRemove.get(i).clone();
+                                                unsoldItem.setAmount(unsoldAmount);
                                                 schedulerUtil.runTask(() -> {
-                                                    Map<Integer, ItemStack> leftover = player.getInventory().addItem(unsoldItem);
-                                                    for (ItemStack leftoverItem : leftover.values()) {
-                                                        player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
-                                                    }
+                                                    returnItemToPlayer(player, unsoldItem);
                                                 });
                                             } else {
                                                 // 连1个都卖不了，全部返回
                                                 actualAmounts.add(0);
-                                                final ItemStack unsoldItem = new ItemStack(
-                                                    Material.valueOf(finalMaterialNames.get(i)), finalAmounts.get(i));
+                                                final ItemStack unsoldItem = itemsToRemove.get(i).clone();
                                                 schedulerUtil.runTask(() -> {
-                                                    Map<Integer, ItemStack> leftover = player.getInventory().addItem(unsoldItem);
-                                                    for (ItemStack leftoverItem : leftover.values()) {
-                                                        player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
-                                                    }
+                                                    returnItemToPlayer(player, unsoldItem);
                                                 });
                                             }
                                         } else {
                                             // 限额用完，全部返回
                                             actualAmounts.add(0);
-                                            final ItemStack unsoldItem = new ItemStack(
-                                                Material.valueOf(finalMaterialNames.get(i)), finalAmounts.get(i));
+                                            final ItemStack unsoldItem = itemsToRemove.get(i).clone();
                                             schedulerUtil.runTask(() -> {
-                                                Map<Integer, ItemStack> leftover = player.getInventory().addItem(unsoldItem);
-                                                for (ItemStack leftoverItem : leftover.values()) {
-                                                    player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
-                                                }
+                                                returnItemToPlayer(player, unsoldItem);
                                             });
                                         }
                                     }
@@ -791,10 +780,7 @@ public class MenuManager implements Listener {
                                 player.sendMessage(ColorUtil.translateColorCodes(message));
                                 // 将所有已移除的物品退回给玩家
                                 for (ItemStack item : itemsToRemove) {
-                                    Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
-                                    for (ItemStack leftoverItem : leftover.values()) {
-                                        player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
-                                    }
+                                    returnItemToPlayer(player, item.clone());
                                 }
                             });
                             return;
@@ -840,10 +826,7 @@ public class MenuManager implements Listener {
                         schedulerUtil.runTask(() -> {
                             player.sendMessage(ColorUtil.translateColorCodes( configManager.getLang().getString("prefix") + configManager.getLang().getString("menu.sell.failed")));
                             for (ItemStack item : itemsToRemove) {
-                                Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
-                                for (ItemStack leftoverItem : leftover.values()) {
-                                    player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
-                                }
+                                returnItemToPlayer(player, item.clone());
                             }
                         });
                         plugin.getLogger().severe("Error handling sell: " + e.getMessage());
@@ -852,13 +835,21 @@ public class MenuManager implements Listener {
             }
 
             for (ItemStack item : returnItems) {
-                Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
-                for (ItemStack leftoverItem : leftover.values()) {
-                    player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
-                }
+                returnItemToPlayer(player, item.clone());
             }
         } else if (displayName.equals(backDisplayName)) {
             openMainMenu(player);
+        }
+    }
+
+    private void returnItemToPlayer(Player player, ItemStack item) {
+        if (item == null || item.getType() == Material.AIR || item.getAmount() <= 0) {
+            return;
+        }
+
+        Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
+        for (ItemStack leftoverItem : leftover.values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
         }
     }
 
