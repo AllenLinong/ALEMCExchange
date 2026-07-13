@@ -249,7 +249,7 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.exchange.buttons.back.slot"), backItem);
 
-        List<String> allMaterials = new ArrayList<>(configManager.getItems().getConfigurationSection("items").getKeys(false));
+        List<String> allMaterials = new ArrayList<>(configManager.getItemMaterialNames());
         Map<String, Boolean> unlockedStatuses = getCachedUnlockedStatuses(player.getUniqueId(), allMaterials);
         List<String> unlockedMaterials = new ArrayList<>();
         for (String materialName : allMaterials) {
@@ -271,8 +271,8 @@ public class MenuManager implements Listener {
             
             try {
                 Material material = Material.valueOf(materialName);
-                double emc = configManager.getItems().getDouble("items." + materialName + ".emc");
-                String itemName = configManager.getItems().getString("items." + materialName + ".name", materialName);
+                double emc = configManager.getItemEMC(materialName);
+                String itemName = configManager.getItemName(materialName);
                 ItemStack item = new ItemStack(material);
                 ItemMeta meta = item.getItemMeta();
                 if (meta != null) {
@@ -387,7 +387,7 @@ public class MenuManager implements Listener {
         );
         inventory.setItem(configManager.getMenus().getInt("menus.browse.buttons.back.slot"), backItem);
 
-        List<String> materials = new ArrayList<>(configManager.getItems().getConfigurationSection("items").getKeys(false));
+        List<String> materials = new ArrayList<>(configManager.getItemMaterialNames());
         int totalItems = materials.size();
         int totalPages = (totalItems + itemsPerPage - 1) / itemsPerPage;
 
@@ -406,10 +406,10 @@ public class MenuManager implements Listener {
             
             try {
                 Material material = Material.valueOf(materialName);
-                double emc = configManager.getItems().getDouble("items." + materialName + ".emc");
-                int requiredMine = configManager.getItems().getInt("items." + materialName + ".required_mine");
-                int requiredSell = configManager.getItems().getInt("items." + materialName + ".required_sell");
-                String itemName = configManager.getItems().getString("items." + materialName + ".name", materialName);
+                double emc = configManager.getItemEMC(materialName);
+                int requiredMine = configManager.getRequiredMine(materialName);
+                int requiredSell = configManager.getRequiredSell(materialName);
+                String itemName = configManager.getItemName(materialName);
                 ItemStack item = new ItemStack(material);
                 ItemMeta meta = item.getItemMeta();
                 if (meta != null) {
@@ -683,8 +683,8 @@ public class MenuManager implements Listener {
                 ItemStack item = inventory.getItem(i);
                 if (item != null && item.getType() != Material.AIR) {
                     String materialName = item.getType().name();
-                    if (configManager.getItems().contains("items." + materialName)) {
-                        double emcPerItem = configManager.getItems().getDouble("items." + materialName + ".emc");
+                    if (configManager.hasItem(materialName)) {
+                        double emcPerItem = configManager.getItemEMC(materialName);
                         int amount = item.getAmount();
                         totalEMC[0] += emcPerItem * amount;
                         materialNames.add(materialName);
@@ -706,18 +706,22 @@ public class MenuManager implements Listener {
 
                 schedulerUtil.runAsync(() -> {
                     double taxRate = configManager.getTaxRateForPlayer(player);
+                    String consumedDailyDate = null;
+                    double consumedDailyEMC = 0;
+                    boolean balanceCredited = false;
 
                     try {
                         // 计算实际可获得的EMC（考虑每日限制）
                         double allowedEMC = finalTotalEMC;
                         List<Integer> actualAmounts = new ArrayList<>(finalAmounts);
-
+                        List<ItemStack> limitReturnItems = new ArrayList<>();
                         if (configManager.isDailyLimitEnabled()) {
                             double dailyLimit = configManager.getDailyLimitForPlayer(player);
                             if (dailyLimit != -1) { // -1 表示无限制
                                 String effectiveDate = databaseManager.getEffectiveDate();
-                                double alreadyEarned = databaseManager.getDailyEMCEarned(player.getUniqueId(), effectiveDate);
-                                double remaining = dailyLimit - alreadyEarned;
+                                consumedDailyDate = effectiveDate;
+                                double remaining = databaseManager.consumeDailyEMCLimit(player.getUniqueId(), effectiveDate, finalTotalEMC, dailyLimit);
+                                consumedDailyEMC = remaining;
 
                                 if (remaining <= 0) {
                                     // 今日限额已用完，全部返回
@@ -746,56 +750,54 @@ public class MenuManager implements Listener {
 
                                                 // 返回剩余物品
                                                 final int unsoldAmount = finalAmounts.get(i) - sellableAmount;
-                                                final ItemStack unsoldItem = itemsToRemove.get(i).clone();
-                                                unsoldItem.setAmount(unsoldAmount);
-                                                schedulerUtil.runTask(() -> {
-                                                    returnItemToPlayer(player, unsoldItem);
-                                                });
+                                                if (unsoldAmount > 0) {
+                                                    ItemStack unsoldItem = itemsToRemove.get(i).clone();
+                                                    unsoldItem.setAmount(unsoldAmount);
+                                                    limitReturnItems.add(unsoldItem);
+                                                }
                                             } else {
                                                 // 连1个都卖不了，全部返回
                                                 actualAmounts.add(0);
-                                                final ItemStack unsoldItem = itemsToRemove.get(i).clone();
-                                                schedulerUtil.runTask(() -> {
-                                                    returnItemToPlayer(player, unsoldItem);
-                                                });
+                                                limitReturnItems.add(itemsToRemove.get(i).clone());
                                             }
                                         } else {
                                             // 限额用完，全部返回
                                             actualAmounts.add(0);
-                                            final ItemStack unsoldItem = itemsToRemove.get(i).clone();
-                                            schedulerUtil.runTask(() -> {
-                                                returnItemToPlayer(player, unsoldItem);
-                                            });
+                                            limitReturnItems.add(itemsToRemove.get(i).clone());
                                         }
                                     }
                                 }
                             }
                         }
 
+                        if (consumedDailyDate != null && consumedDailyEMC > allowedEMC) {
+                            databaseManager.addDailyEMCEarned(player.getUniqueId(), consumedDailyDate, -(consumedDailyEMC - allowedEMC));
+                            consumedDailyEMC = allowedEMC;
+                        }
+
                         if (allowedEMC <= 0) {
+                            final List<ItemStack> itemsToReturn = limitReturnItems.isEmpty()
+                                    ? cloneItemList(itemsToRemove)
+                                    : cloneItemList(limitReturnItems);
                             // 限额已用完，提示玩家并返回所有物品
                             schedulerUtil.runTask(() -> {
                                 String message = configManager.getLang().getString("prefix") +
                                         configManager.getLang().getString("daily_limit.reached");
                                 player.sendMessage(ColorUtil.translateColorCodes(message));
                                 // 将所有已移除的物品退回给玩家
-                                for (ItemStack item : itemsToRemove) {
-                                    returnItemToPlayer(player, item.clone());
-                                }
+                                returnItemsToPlayer(player, itemsToReturn);
                             });
                             return;
                         }
 
                         double tax = allowedEMC * taxRate;
                         final double netEMC = allowedEMC - tax;
-                        final double finalAllowedEMC = allowedEMC;
 
                         // 记录每日获取量（使用税前EMC，避免税率导致小数零头）
-                        if (configManager.isDailyLimitEnabled()) {
-                            String effectiveDate = databaseManager.getEffectiveDate();
-                            databaseManager.addDailyEMCEarned(player.getUniqueId(), effectiveDate, finalAllowedEMC);
-                        }
+                        databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
+                        balanceCredited = true;
 
+                        try {
                         for (int i = 0; i < finalMaterialNames.size(); i++) {
                             String materialName = finalMaterialNames.get(i);
                             int amount = actualAmounts.get(i);
@@ -803,7 +805,7 @@ public class MenuManager implements Listener {
                             if (amount <= 0) continue;
 
                             if (!databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
-                                int requiredSell = configManager.getItems().getInt("items." + materialName + ".required_sell");
+                                int requiredSell = configManager.getRequiredSell(materialName);
                                 if (requiredSell > 0) {
                                     int currentProgress = databaseManager.getSellProgress(player.getUniqueId(), materialName);
                                     int addAmount = Math.min(amount, requiredSell - currentProgress);
@@ -815,18 +817,32 @@ public class MenuManager implements Listener {
                             }
                         }
 
-                        databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
+                        } catch (SQLException | ClassNotFoundException progressException) {
+                            plugin.getLogger().severe("Error updating sell progress: " + progressException.getMessage());
+                        }
 
+                        final List<ItemStack> finalLimitReturnItems = cloneItemList(limitReturnItems);
                         schedulerUtil.runTask(() -> {
+                            returnItemsToPlayer(player, finalLimitReturnItems);
                             String message = configManager.getLang().getString("prefix") +
                                     configManager.getLang().getString("menu.sell.success").replace("{amount}", String.format("%.2f", netEMC));
                             player.sendMessage(ColorUtil.translateColorCodes(message));
                         });
                     } catch (SQLException | ClassNotFoundException e) {
+                        if (!balanceCredited && consumedDailyDate != null && consumedDailyEMC > 0) {
+                            try {
+                                databaseManager.addDailyEMCEarned(player.getUniqueId(), consumedDailyDate, -consumedDailyEMC);
+                            } catch (SQLException | ClassNotFoundException refundException) {
+                                plugin.getLogger().severe("Error refunding daily EMC limit: " + refundException.getMessage());
+                            }
+                        }
+                        final boolean shouldReturnItems = !balanceCredited;
                         schedulerUtil.runTask(() -> {
                             player.sendMessage(ColorUtil.translateColorCodes( configManager.getLang().getString("prefix") + configManager.getLang().getString("menu.sell.failed")));
-                            for (ItemStack item : itemsToRemove) {
-                                returnItemToPlayer(player, item.clone());
+                            if (shouldReturnItems) {
+                                for (ItemStack item : itemsToRemove) {
+                                    returnItemToPlayer(player, item.clone());
+                                }
                             }
                         });
                         plugin.getLogger().severe("Error handling sell: " + e.getMessage());
@@ -839,6 +855,22 @@ public class MenuManager implements Listener {
             }
         } else if (displayName.equals(backDisplayName)) {
             openMainMenu(player);
+        }
+    }
+
+    private List<ItemStack> cloneItemList(List<ItemStack> items) {
+        List<ItemStack> clones = new ArrayList<>(items.size());
+        for (ItemStack item : items) {
+            if (item != null) {
+                clones.add(item.clone());
+            }
+        }
+        return clones;
+    }
+
+    private void returnItemsToPlayer(Player player, List<ItemStack> items) {
+        for (ItemStack item : items) {
+            returnItemToPlayer(player, item);
         }
     }
 
@@ -872,14 +904,12 @@ public class MenuManager implements Listener {
         Material material = clickedItem.getType();
         String materialName = material.name();
         try {
-            double emcPerItem = configManager.getItems().getDouble("items." + materialName + ".emc");
-            int amount = isRightClick ? 64 : 1;
-            double totalEMC = emcPerItem * amount;
-
-            if (!databaseManager.hasSufficientEMC(player.getUniqueId(), totalEMC)) {
-                player.sendMessage(ColorUtil.translateColorCodes( configManager.getLang().getString("prefix") + configManager.getLang().getString("command.insufficient-funds")));
+            double emcPerItem = configManager.getItemEMC(materialName);
+            if (emcPerItem <= 0) {
                 return;
             }
+            int amount = isRightClick ? 64 : 1;
+            double totalEMC = emcPerItem * amount;
 
             int maxStackSize = material.getMaxStackSize();
             int emptySlots = 0;
@@ -909,7 +939,10 @@ public class MenuManager implements Listener {
                 return;
             }
 
-            databaseManager.addEMCBalance(player.getUniqueId(), -totalEMC);
+            if (!databaseManager.tryWithdrawEMC(player.getUniqueId(), totalEMC)) {
+                player.sendMessage(ColorUtil.translateColorCodes( configManager.getLang().getString("prefix") + configManager.getLang().getString("command.insufficient-funds")));
+                return;
+            }
             clearPlayerCache(player.getUniqueId());
 
             ItemStack itemToAdd = new ItemStack(material, amount);
@@ -933,7 +966,8 @@ public class MenuManager implements Listener {
             for (int i = 9; i < 45; i++) {
                 ItemStack item = inventory.getItem(i);
                 if (item != null && item.getType() != Material.AIR) {
-                    player.getInventory().addItem(item);
+                    returnItemToPlayer(player, item);
+                    inventory.setItem(i, null);
                 }
             }
         }
@@ -1126,8 +1160,8 @@ public class MenuManager implements Listener {
     }
 
     private void checkUnlock(Player player, String materialName) throws SQLException, ClassNotFoundException {
-        int requiredMine = configManager.getItems().getInt("items." + materialName + ".required_mine");
-        int requiredSell = configManager.getItems().getInt("items." + materialName + ".required_sell");
+        int requiredMine = configManager.getRequiredMine(materialName);
+        int requiredSell = configManager.getRequiredSell(materialName);
 
         int mineProgress = databaseManager.getMineProgress(player.getUniqueId(), materialName);
         int sellProgress = databaseManager.getSellProgress(player.getUniqueId(), materialName);
@@ -1138,7 +1172,7 @@ public class MenuManager implements Listener {
         if (mineCondition && sellCondition && !databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
             databaseManager.unlockItem(player.getUniqueId(), materialName);
             clearPlayerCache(player.getUniqueId());
-            String itemDisplayName = configManager.getItems().getString("items." + materialName + ".name", materialName);
+            String itemDisplayName = configManager.getItemName(materialName);
             final String message = configManager.getLang().getString("prefix") + 
                     configManager.getLang().getString("mine.unlocked").replace("{item}", itemDisplayName);
             schedulerUtil.runTask(() -> {

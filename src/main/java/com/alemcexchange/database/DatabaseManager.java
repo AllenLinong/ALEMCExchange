@@ -16,6 +16,8 @@ public class DatabaseManager {
     private HikariDataSource dataSource;
     private boolean isMySQL = false;
     private String tablePrefix = "";
+    private String sqliteFile = "alembc.db";
+    private volatile boolean dailyEMCTableReady = false;
 
     public DatabaseManager(JavaPlugin plugin, ConfigManager configManager) {
         this.plugin = plugin;
@@ -76,7 +78,7 @@ public class DatabaseManager {
             connection = dataSource.getConnection();
         } else {
             Class.forName("org.sqlite.JDBC");
-            String sqliteFile = configManager.getConfig().getString("database.sqlite.file", "alembc.db");
+            sqliteFile = configManager.getConfig().getString("database.sqlite.file", "alembc.db");
             connection = DriverManager.getConnection("jdbc:sqlite:" + plugin.getDataFolder() + "/" + sqliteFile);
         }
 
@@ -106,7 +108,7 @@ public class DatabaseManager {
         // 创建每日EMC获取记录表
         String createDailyEMCTable = "CREATE TABLE IF NOT EXISTS " + tablePrefix + "player_daily_emc " +
                 "(uuid VARCHAR(36), date VARCHAR(10), emc_earned DOUBLE DEFAULT 0, " +
-                "PRIMARY KEY (uuid, date), FOREIGN KEY (uuid) REFERENCES " + tablePrefix + "players(uuid))";
+                "PRIMARY KEY (uuid, date))";
 
         Connection conn = getConnection();
         Statement stmt = conn.createStatement();
@@ -125,6 +127,35 @@ public class DatabaseManager {
         plugin.getLogger().info("Database tables created successfully!");
     }
 
+    private synchronized void ensureDailyEMCTableExists() throws SQLException, ClassNotFoundException {
+        if (dailyEMCTableReady) {
+            return;
+        }
+
+        String query = "CREATE TABLE IF NOT EXISTS " + tablePrefix + "player_daily_emc " +
+                "(uuid VARCHAR(36), date VARCHAR(10), emc_earned DOUBLE DEFAULT 0, " +
+                "PRIMARY KEY (uuid, date))";
+
+        if (isMySQL) {
+            try (Connection conn = getConnection();
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute(query);
+            }
+        } else {
+            Connection conn = getConnection();
+            Statement stmt = conn.createStatement();
+            try {
+                stmt.execute(query);
+            } finally {
+                if (stmt != null) {
+                    stmt.close();
+                }
+            }
+        }
+
+        dailyEMCTableReady = true;
+    }
+
     private Connection getConnection() throws SQLException, ClassNotFoundException {
         if (dataSource != null) {
             // MySQL 连接，从连接池获取
@@ -134,7 +165,7 @@ public class DatabaseManager {
             if (connection == null || connection.isClosed()) {
                 // 重新连接
                 Class.forName("org.sqlite.JDBC");
-                connection = DriverManager.getConnection("jdbc:sqlite:" + plugin.getDataFolder() + "/alembc.db");
+                connection = DriverManager.getConnection("jdbc:sqlite:" + plugin.getDataFolder() + "/" + sqliteFile);
                 plugin.getLogger().info("SQLite connection established!");
             }
             return connection;
@@ -291,6 +322,92 @@ public class DatabaseManager {
         }
     }
 
+    public boolean tryWithdrawEMC(UUID uuid, double amount) throws SQLException, ClassNotFoundException {
+        if (amount <= 0) {
+            return true;
+        }
+
+        ensurePlayerExists(uuid);
+
+        String query = "UPDATE " + tablePrefix + "players SET emc_balance = emc_balance - ? WHERE uuid = ? AND emc_balance >= ?";
+
+        if (isMySQL) {
+            try (Connection conn = getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setDouble(1, amount);
+                stmt.setString(2, uuid.toString());
+                stmt.setDouble(3, amount);
+                return stmt.executeUpdate() > 0;
+            }
+        } else {
+            Connection conn = getConnection();
+            PreparedStatement stmt = conn.prepareStatement(query);
+            try {
+                stmt.setDouble(1, amount);
+                stmt.setString(2, uuid.toString());
+                stmt.setDouble(3, amount);
+                return stmt.executeUpdate() > 0;
+            } finally {
+                if (stmt != null) {
+                    stmt.close();
+                }
+            }
+        }
+    }
+
+    public synchronized boolean transferEMC(UUID fromUuid, UUID toUuid, double debitAmount, double creditAmount) throws SQLException, ClassNotFoundException {
+        if (debitAmount <= 0 || creditAmount < 0) {
+            return false;
+        }
+
+        ensurePlayerExists(fromUuid);
+        ensurePlayerExists(toUuid);
+
+        Connection conn = getConnection();
+        boolean originalAutoCommit = conn.getAutoCommit();
+        try {
+            conn.setAutoCommit(false);
+
+            String debitQuery = "UPDATE " + tablePrefix + "players SET emc_balance = emc_balance - ? WHERE uuid = ? AND emc_balance >= ?";
+            try (PreparedStatement debitStmt = conn.prepareStatement(debitQuery)) {
+                debitStmt.setDouble(1, debitAmount);
+                debitStmt.setString(2, fromUuid.toString());
+                debitStmt.setDouble(3, debitAmount);
+                if (debitStmt.executeUpdate() <= 0) {
+                    conn.rollback();
+                    return false;
+                }
+            }
+
+            String creditQuery = "UPDATE " + tablePrefix + "players SET emc_balance = emc_balance + ? WHERE uuid = ?";
+            try (PreparedStatement creditStmt = conn.prepareStatement(creditQuery)) {
+                creditStmt.setDouble(1, creditAmount);
+                creditStmt.setString(2, toUuid.toString());
+                if (creditStmt.executeUpdate() <= 0) {
+                    conn.rollback();
+                    return false;
+                }
+            }
+
+            conn.commit();
+            return true;
+        } catch (SQLException e) {
+            try {
+                conn.rollback();
+            } catch (SQLException ignored) {
+            }
+            throw e;
+        } finally {
+            try {
+                conn.setAutoCommit(originalAutoCommit);
+            } finally {
+                if (isMySQL) {
+                    conn.close();
+                }
+            }
+        }
+    }
+
     public boolean hasSufficientEMC(UUID uuid, double amount) throws SQLException, ClassNotFoundException {
         return getEMCBalance(uuid) >= amount;
     }
@@ -419,10 +536,6 @@ public class DatabaseManager {
 
     public void addMineProgress(UUID uuid, String material, int amount) throws SQLException, ClassNotFoundException {
         // 如果物品已解锁，不再记录进度
-        if (isUnlocked(uuid, material)) {
-            return;
-        }
-        
         ensurePlayerExists(uuid);
         
         String query;
@@ -712,8 +825,8 @@ public class DatabaseManager {
                 deleteStmt.executeUpdate();
 
                 // 使用批量插入来提高性能
-                if (configManager.getItems().contains("items")) {
-                    Set<String> materialNames = configManager.getItems().getConfigurationSection("items").getKeys(false);
+                if (!configManager.getItemMaterialNames().isEmpty()) {
+                    List<String> materialNames = configManager.getItemMaterialNames();
                     if (materialNames.isEmpty()) {
                         return;
                     }
@@ -746,8 +859,8 @@ public class DatabaseManager {
                 deleteStmt.executeUpdate();
 
                 // 使用批量插入来提高性能
-                if (configManager.getItems().contains("items")) {
-                    Set<String> materialNames = configManager.getItems().getConfigurationSection("items").getKeys(false);
+                if (!configManager.getItemMaterialNames().isEmpty()) {
+                    List<String> materialNames = configManager.getItemMaterialNames();
                     if (materialNames.isEmpty()) {
                         return;
                     }
@@ -1079,6 +1192,7 @@ public class DatabaseManager {
      */
     public double getDailyEMCEarned(UUID uuid, String date) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
+        ensureDailyEMCTableExists();
 
         String query = "SELECT emc_earned FROM " + tablePrefix + "player_daily_emc WHERE uuid = ? AND date = ?";
 
@@ -1122,8 +1236,82 @@ public class DatabaseManager {
     /**
      * 累加玩家今日已获得的EMC数量
      */
+    public synchronized double consumeDailyEMCLimit(UUID uuid, String date, double requestedAmount, double dailyLimit) throws SQLException, ClassNotFoundException {
+        if (requestedAmount <= 0) {
+            return 0;
+        }
+
+        if (dailyLimit < 0) {
+            return requestedAmount;
+        }
+
+        ensurePlayerExists(uuid);
+        ensureDailyEMCTableExists();
+
+        Connection conn = getConnection();
+        boolean originalAutoCommit = conn.getAutoCommit();
+        try {
+            conn.setAutoCommit(false);
+
+            String insertQuery = isMySQL
+                    ? "INSERT IGNORE INTO " + tablePrefix + "player_daily_emc (uuid, date, emc_earned) VALUES (?, ?, 0)"
+                    : "INSERT OR IGNORE INTO " + tablePrefix + "player_daily_emc (uuid, date, emc_earned) VALUES (?, ?, 0)";
+            try (PreparedStatement insertStmt = conn.prepareStatement(insertQuery)) {
+                insertStmt.setString(1, uuid.toString());
+                insertStmt.setString(2, date);
+                insertStmt.executeUpdate();
+            }
+
+            double alreadyEarned = 0;
+            String selectQuery = "SELECT emc_earned FROM " + tablePrefix + "player_daily_emc WHERE uuid = ? AND date = ?"
+                    + (isMySQL ? " FOR UPDATE" : "");
+            try (PreparedStatement selectStmt = conn.prepareStatement(selectQuery)) {
+                selectStmt.setString(1, uuid.toString());
+                selectStmt.setString(2, date);
+                try (ResultSet rs = selectStmt.executeQuery()) {
+                    if (rs.next()) {
+                        alreadyEarned = rs.getDouble("emc_earned");
+                    }
+                }
+            }
+
+            double remaining = Math.max(0, dailyLimit - alreadyEarned);
+            double allowed = Math.min(requestedAmount, remaining);
+            if (allowed <= 0) {
+                conn.commit();
+                return 0;
+            }
+
+            String updateQuery = "UPDATE " + tablePrefix + "player_daily_emc SET emc_earned = emc_earned + ? WHERE uuid = ? AND date = ?";
+            try (PreparedStatement updateStmt = conn.prepareStatement(updateQuery)) {
+                updateStmt.setDouble(1, allowed);
+                updateStmt.setString(2, uuid.toString());
+                updateStmt.setString(3, date);
+                updateStmt.executeUpdate();
+            }
+
+            conn.commit();
+            return allowed;
+        } catch (SQLException e) {
+            try {
+                conn.rollback();
+            } catch (SQLException ignored) {
+            }
+            throw e;
+        } finally {
+            try {
+                conn.setAutoCommit(originalAutoCommit);
+            } finally {
+                if (isMySQL) {
+                    conn.close();
+                }
+            }
+        }
+    }
+
     public void addDailyEMCEarned(UUID uuid, String date, double amount) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
+        ensureDailyEMCTableExists();
 
         String query;
         if (isMySQL) {
@@ -1165,6 +1353,8 @@ public class DatabaseManager {
      */
     public void cleanupOldDailyEMCRecords() {
         try {
+            ensureDailyEMCTableExists();
+
             java.util.Calendar calendar = java.util.Calendar.getInstance();
             calendar.add(java.util.Calendar.DAY_OF_MONTH, -7);
             java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");

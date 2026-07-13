@@ -183,12 +183,9 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             }
         } else if (args.length == 3 && args[0].equalsIgnoreCase("unlock")) {
             // 为 unlock 命令添加物品ID补全
-            if (configManager.getItems().contains("items")) {
-                Set<String> materialNames = configManager.getItems().getConfigurationSection("items").getKeys(false);
-                for (String material : materialNames) {
-                    if (material.toLowerCase().startsWith(args[2].toLowerCase())) {
-                        completions.add(material);
-                    }
+            for (String material : configManager.getItemMaterialNames()) {
+                if (material.toLowerCase().startsWith(args[2].toLowerCase())) {
+                    completions.add(material);
                 }
             }
         }
@@ -345,18 +342,15 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 return;
             }
 
-            if (!databaseManager.hasSufficientEMC(player.getUniqueId(), amount)) {
-                sendMessage(player, "command.insufficient-funds");
-                return;
-            }
-
             double taxRate = configManager.getTaxRateForPlayer(player);
 
             double tax = amount * taxRate;
             double netAmount = amount - tax;
 
-            databaseManager.addEMCBalance(player.getUniqueId(), -amount);
-            databaseManager.addEMCBalance(target.getUniqueId(), netAmount);
+            if (!databaseManager.transferEMC(player.getUniqueId(), target.getUniqueId(), amount, netAmount)) {
+                sendMessage(player, "command.insufficient-funds");
+                return;
+            }
             // 清理双方玩家的缓存
             menuManager.clearPlayerCache(player.getUniqueId());
             menuManager.clearPlayerCache(target.getUniqueId());
@@ -583,7 +577,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         String material = args[2].toUpperCase();
 
         // 检查物品是否存在于配置中
-        if (!configManager.getItems().contains("items." + material)) {
+        if (!configManager.hasItem(material)) {
             sendMessage(player, "command.unlock.invalid-item");
             return;
         }
@@ -615,7 +609,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         String material = args[2].toUpperCase();
 
         // 检查物品是否存在于配置中
-        if (!configManager.getItems().contains("items." + material)) {
+        if (!configManager.hasItem(material)) {
             sendMessage(sender, "command.unlock.invalid-item");
             return;
         }

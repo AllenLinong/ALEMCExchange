@@ -1,10 +1,16 @@
 package com.alemcexchange.config;
 
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class ConfigManager {
 
@@ -13,6 +19,8 @@ public class ConfigManager {
     private YamlConfiguration lang;
     private YamlConfiguration items;
     private YamlConfiguration menus;
+    private Map<String, ItemConfig> itemCache = Collections.emptyMap();
+    private List<String> itemMaterialNames = Collections.emptyList();
 
     public ConfigManager(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -27,6 +35,7 @@ public class ConfigManager {
         
         // 补全缺失的配置项
         completeMissingConfig();
+        rebuildItemCache();
         
         plugin.getLogger().info("Config files loaded successfully!");
     }
@@ -171,6 +180,56 @@ public class ConfigManager {
         return menus;
     }
 
+    private void rebuildItemCache() {
+        Map<String, ItemConfig> newCache = new HashMap<>();
+        ConfigurationSection itemSection = items.getConfigurationSection("items");
+        if (itemSection != null) {
+            for (String materialName : itemSection.getKeys(false)) {
+                String path = "items." + materialName + ".";
+                newCache.put(materialName, new ItemConfig(
+                        items.getString(path + "name", materialName),
+                        items.getDouble(path + "emc", 0),
+                        items.getInt(path + "required_mine", 0),
+                        items.getInt(path + "required_sell", 0)
+                ));
+            }
+        }
+        itemCache = Collections.unmodifiableMap(newCache);
+        itemMaterialNames = Collections.unmodifiableList(new ArrayList<>(newCache.keySet()));
+    }
+
+    public boolean hasItem(String materialName) {
+        return itemCache.containsKey(materialName);
+    }
+
+    public List<String> getItemMaterialNames() {
+        return itemMaterialNames;
+    }
+
+    public ItemConfig getItemConfig(String materialName) {
+        return itemCache.get(materialName);
+    }
+
+    public double getItemEMC(String materialName) {
+        ItemConfig itemConfig = itemCache.get(materialName);
+        return itemConfig != null ? itemConfig.getEmc() : 0;
+    }
+
+    public int getRequiredMine(String materialName) {
+        ItemConfig itemConfig = itemCache.get(materialName);
+        return itemConfig != null ? itemConfig.getRequiredMine() : 0;
+    }
+
+    public int getRequiredSell(String materialName) {
+        ItemConfig itemConfig = itemCache.get(materialName);
+        return itemConfig != null ? itemConfig.getRequiredSell() : 0;
+    }
+
+    public String getItemName(String materialName) {
+        ItemConfig itemConfig = itemCache.get(materialName);
+        return itemConfig != null ? itemConfig.getName() : materialName;
+    }
+
     public double getTaxRate(String permission) {
         if (config.contains("tax_rates." + permission)) {
             return config.getDouble("tax_rates." + permission);
@@ -262,5 +321,35 @@ public class ConfigManager {
 
         // 返回默认限制
         return config.getDouble("daily_limit.default_limit", 10000);
+    }
+
+    public static class ItemConfig {
+        private final String name;
+        private final double emc;
+        private final int requiredMine;
+        private final int requiredSell;
+
+        public ItemConfig(String name, double emc, int requiredMine, int requiredSell) {
+            this.name = name;
+            this.emc = emc;
+            this.requiredMine = requiredMine;
+            this.requiredSell = requiredSell;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public double getEmc() {
+            return emc;
+        }
+
+        public int getRequiredMine() {
+            return requiredMine;
+        }
+
+        public int getRequiredSell() {
+            return requiredSell;
+        }
     }
 }

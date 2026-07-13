@@ -61,7 +61,7 @@ public class BlockBreakListener implements Listener {
             return;
         }
 
-        if (configManager.getItems().contains("items." + materialName)) {
+        if (configManager.hasItem(materialName)) {
             schedulerUtil.runAsync(() -> {
                 try {
                     if (!databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
@@ -80,8 +80,8 @@ public class BlockBreakListener implements Listener {
     }
 
     private void checkUnlock(Player player, String materialName) throws SQLException, ClassNotFoundException {
-        int requiredMine = configManager.getItems().getInt("items." + materialName + ".required_mine");
-        int requiredSell = configManager.getItems().getInt("items." + materialName + ".required_sell");
+        int requiredMine = configManager.getRequiredMine(materialName);
+        int requiredSell = configManager.getRequiredSell(materialName);
 
         // 先清理缓存，确保获取最新的进度数据
         if (menuManager != null) {
@@ -100,7 +100,7 @@ public class BlockBreakListener implements Listener {
             if (menuManager != null) {
                 menuManager.clearPlayerCache(player.getUniqueId());
             }
-            String itemDisplayName = configManager.getItems().getString("items." + materialName + ".name", materialName);
+            String itemDisplayName = configManager.getItemName(materialName);
             final String message = configManager.getLang().getString("prefix") + 
                     configManager.getLang().getString("mine.unlocked").replace("{item}", itemDisplayName);
             schedulerUtil.runTask(() -> {
