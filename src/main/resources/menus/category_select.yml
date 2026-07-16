@@ -1,0 +1,33 @@
+# 分类选择 — 选择地标分类进行过滤
+category_select:
+  title: "&a地标分类"
+  shape:
+    - "#########"
+    - "#A#B#C#D#"
+    - "####E####"
+    - "#########"
+  items:
+    A:
+      type: WHEAT
+      name: "&a农场"
+      action: "filter:1"
+    B:
+      type: CHEST
+      name: "&6商店"
+      action: "filter:2"
+    C:
+      type: DIAMOND_SWORD
+      name: "&c竞技场"
+      action: "filter:3"
+    D:
+      type: BRICK
+      name: "&b建筑"
+      action: "filter:4"
+    E:
+      type: MAP
+      name: "&7其他"
+      action: "filter:5"
+      default: true
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

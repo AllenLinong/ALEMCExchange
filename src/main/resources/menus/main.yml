@@ -1,0 +1,272 @@
+# 主菜单 — 浏览全部地标
+#
+# 菜单图标写法：
+# 1. 原版物品：
+#    type: BEACON
+# 2. 资源包 CustomModelData：
+#    type: PAPER
+#    custom_model_data: 10001
+# 3. CraftEngine 自定义物品（推荐）：
+#    craftengine: "namespace:item_id"
+# 4. ItemsAdder 自定义物品：
+#    itemsadder: "namespace:item_id"
+# 5. Oraxen 自定义物品：
+#    oraxen: "item_id"
+# 兼容旧写法：
+#    plugin_item: "ce:namespace:item_id"
+#    plugin_item: "ia:namespace:item_id"
+#    plugin_item: "oraxen:item_id"
+#    type: "ce:namespace:item_id"
+# 注意：命名空间和物品ID之间必须使用英文半角冒号 ":"，不要使用中文全角冒号 "："。
+main_menu:
+  title: "&a玩家地标"
+  shape:
+    - "####W####"
+    - "#1234567#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N#Q#FSC#P"
+  items:
+    W:
+      type: BEACON
+      name: "&a我的地标"
+      lore:
+        - "&f点击查看并管理你的地标"
+      action: "open_gui:my_landmarks"
+    # 置顶位按钮配置：
+    # - shape 里放多少个 pin_slot: true 的按钮，就有多少个置顶位。
+    # - pin_slot_id 是置顶槽唯一编号；后续新增更多槽位时不要重复。
+    # - 玩家点击空置顶位后进入购买界面；确认购买才会扣费并保存。
+    # - cost 是购买这个置顶位的费用，duration_days 是从购买成功开始计算的置顶天数。
+    # - 到期后会自动释放该位置，其他玩家可再次购买。
+    # - 已有置顶地标时，左键传送，右键收藏/取消收藏，Shift+左键查看评论。
+    1:
+      type: OAK_SIGN
+      name: "&6置顶位 #1"
+      lore:
+        - "&f状态：%pin_status%"
+        - "&f费用：&6%pin_cost% 金币"
+        - "&f时长：&e%pin_days% 天"
+        - "&f到期：&e%pin_expires%"
+        - "&a点击购买或使用此置顶位"
+      # 标记这个按钮是置顶槽；自定义新增置顶槽时必须为 true。
+      pin_slot: true
+      # 置顶槽唯一编号；新增更多槽位时不要和其他槽重复。
+      pin_slot_id: 1
+      # 左键动作：空槽打开购买界面；已置顶时传送到该地标。
+      action: "pin_slot:%pin_slot%"
+      # 右键动作：已置顶时收藏/取消收藏该地标；空槽会打开购买界面。
+      right_action: "pin_slot_favorite:%pin_slot%"
+      # Shift+左键动作：已置顶时查看评论；空槽会打开购买界面。
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      # 购买这个置顶位需要支付的金币，确认购买时才扣费。
+      cost: 1000.0
+      # 置顶持续天数，从确认购买成功那一刻开始计算。
+      duration_days: 7
+    2:
+      type: OAK_SIGN
+      name: "&6置顶位 #2"
+      lore:
+        - "&f状态：%pin_status%"
+        - "&f费用：&6%pin_cost% 金币"
+        - "&f时长：&e%pin_days% 天"
+        - "&f到期：&e%pin_expires%"
+        - "&a点击购买或使用此置顶位"
+      pin_slot: true
+      pin_slot_id: 2
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    3:
+      type: OAK_SIGN
+      name: "&6置顶位 #3"
+      lore:
+        - "&f状态：%pin_status%"
+        - "&f费用：&6%pin_cost% 金币"
+        - "&f时长：&e%pin_days% 天"
+        - "&f到期：&e%pin_expires%"
+        - "&a点击购买或使用此置顶位"
+      pin_slot: true
+      pin_slot_id: 3
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    4:
+      type: OAK_SIGN
+      name: "&6置顶位 #4"
+      lore:
+        - "&f状态：%pin_status%"
+        - "&f费用：&6%pin_cost% 金币"
+        - "&f时长：&e%pin_days% 天"
+        - "&f到期：&e%pin_expires%"
+        - "&a点击购买或使用此置顶位"
+      pin_slot: true
+      pin_slot_id: 4
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    5:
+      type: OAK_SIGN
+      name: "&6置顶位 #5"
+      lore:
+        - "&f状态：%pin_status%"
+        - "&f费用：&6%pin_cost% 金币"
+        - "&f时长：&e%pin_days% 天"
+        - "&f到期：&e%pin_expires%"
+        - "&a点击购买或使用此置顶位"
+      pin_slot: true
+      pin_slot_id: 5
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    6:
+      type: OAK_SIGN
+      name: "&6置顶位 #6"
+      lore:
+        - "&f状态：%pin_status%"
+        - "&f费用：&6%pin_cost% 金币"
+        - "&f时长：&e%pin_days% 天"
+        - "&f到期：&e%pin_expires%"
+        - "&a点击购买或使用此置顶位"
+      pin_slot: true
+      pin_slot_id: 6
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    7:
+      type: OAK_SIGN
+      name: "&6置顶位 #7"
+      lore:
+        - "&f状态：%pin_status%"
+        - "&f费用：&6%pin_cost% 金币"
+        - "&f时长：&e%pin_days% 天"
+        - "&f到期：&e%pin_expires%"
+        - "&a点击购买或使用此置顶位"
+      pin_slot: true
+      pin_slot_id: 7
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    A:
+      type: COMPASS
+      name: "&e%landmark_name%"
+      lore:
+        - "&6▶ &8描述"
+        - "&a%landmark_description%"
+        - ""
+        - "&6▶ &8地标信息"
+        - "&a▸&7地标类型：%landmark_category%"
+        - "&a▸&7访问流量：%landmark_visits% &7次"
+        - "&a▸&7创建玩家：%landmark_owner%"
+        - "&a▸&7创建日期：%landmark_date%"
+        - "&a▸&7地标评分：%landmark_rating%"
+        - "&a▸&7收藏热度：%landmark_weekly%"
+        - "&a▸&7传送价格：%landmark_price%"
+        - "&a▸&7所在服区：%landmark_server%"
+        - ""
+        - "&6▶ &8操作"
+        - "&7•&a鼠标左键&a➤&f传送"
+        - "&7•&e鼠标右键&a➤%favorite_action%"
+        - "&7•&bShift+左键&a➤&f查看评论"
+      action: "teleport:%landmark_id%"
+      right_action: "toggle_favorite:%landmark_id%"
+      shift_left_action: "view_reviews:%landmark_id%"
+    N:
+      type: ARROW
+      name: "&a上一页 (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&a下一页 (%current_page%/%total_pages%)"
+      action: "next_page"
+    Q:
+      type: COMPASS
+      name: "&a搜索"
+      lore:
+        - "&f当前搜索：%current_search%"
+        - "&a左键 搜索"
+        - "&e右键 清除搜索"
+      action: "search"
+      right_action: "clear_search"
+    F:
+      type: BOOK
+      name: "&a分类切换"
+      lore:
+        - "&f当前：%current_filter%"
+        - "&a点击切换分类"
+      action: "filter_toggle"
+    S:
+      type: NETHER_STAR
+      name: "&d收藏地标"
+      lore:
+        - "&f点击查看已收藏的地标"
+      action: "open_gui:my_favorites"
+    C:
+      type: EMERALD
+      name: "&a创建地标"
+      lore:
+        - "&a点击创建新地标"
+        - "&f费用：%create_cost% 金币"
+      action: "create_landmark_chat"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "
+
+# ── 自定义按钮简易教程 ─────────────────────────────────────
+# 1. 在 shape 里放一个新的单字符，例如 X；再在 items 下添加 X: 配置。
+# 2. 旧字段点击类型：
+#    action = 左键
+#    right_action = 右键
+#    shift_left_action = Shift+左键
+#    shift_right_action = Shift+右键
+# 3. 单独播放音效：
+#    action: "sound:BLOCK_NOTE_BLOCK_PLING-1-2"
+#    格式为 sound:音效名-音量-音调
+# 4. 如果一个点击要同时播放音效并执行原功能，用 triggers：
+#    triggers:
+#      left:
+#        - "sound:BLOCK_NOTE_BLOCK_PLING-1-2"
+#        - "action: open_gui:my_landmarks"
+# 5. 常用动作：
+#    action: open_gui:菜单名        打开 ALwarp 菜单
+#    command: spawn                玩家执行命令
+#    console: give %player_name% diamond 1  控制台执行命令
+#    message: &a操作成功            给玩家发送消息
+#    close                         关闭菜单
+#    delay: 2t                     延迟后再执行后续动作；t=tick，20t=1秒；支持 2t、1s、500ms；不写单位默认秒
+#
+# 6. 完整示例：添加一个 X 按钮，先关闭 ALwarp 菜单，再延迟打开 TrMenu 的 mine 菜单。
+#    先把上方 shape 中一个空位字符改成 X，例如：
+#      - "N#Q#FSXP"
+#    然后在 items 下添加：
+#    X:
+#      type: CHEST
+#      name: "&a打开 TrMenu 菜单"
+#      lore:
+#        - "&7左键：打开 mine 菜单"
+#        - "&7右键：控制台打开 mine 菜单"
+#      triggers:
+#        left:
+#          - "close"
+#          - "delay: 2t"
+#          - "sound:BLOCK_NOTE_BLOCK_PLING-1-2"
+#          - "command: trmenu open mine"
+#        right:
+#          - "close"
+#          - "delay: 2t"
+#          - "sound:ENTITY_EXPERIENCE_ORB_PICKUP-1-1"
+#          - "console: trmenu open mine %player_name%"
+#    注意：open: 菜单名 只打开 ALwarp 自己的 menus 目录菜单，不会打开其他插件菜单。

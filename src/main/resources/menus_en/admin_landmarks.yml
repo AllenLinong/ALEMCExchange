@@ -1,0 +1,56 @@
+# Admin Menu — manage all server landmarks
+admin_landmarks:
+  title: "&aAdmin"
+  shape:
+    - "#########"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N#Q#F###P"
+  items:
+    A:
+      type: COMPASS
+      name: "&e%landmark_name%"
+      lore:
+        - "&fDescription"
+        - "&a%landmark_description%"
+        - ""
+        - "&fCategory: %landmark_category%"
+        - "&fVisits: %landmark_visits%"
+        - "&fOwner: %landmark_owner%"
+        - "&fCreated: %landmark_date%"
+        - "&fRating: %landmark_rating%"
+        - "&fFavorite heat: %landmark_weekly%"
+        - "&fPrice: %landmark_price%"
+        - "&fServer: %landmark_server%"
+        - ""
+        - "&aLeft: Manage"
+      action: "open_gui:landmark_manage:%landmark_id%"
+    N:
+      type: ARROW
+      name: "&aPrevious (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&aNext (%current_page%/%total_pages%)"
+      action: "next_page"
+    Q:
+      type: COMPASS
+      name: "&aSearch"
+      lore:
+        - "&fSearching: %current_search%"
+        - "&aLeft: Search"
+        - "&eRight: Clear"
+      action: "search"
+      right_action: "clear_search"
+    F:
+      type: BOOK
+      name: "&aFilter"
+      lore:
+        - "&fCurrent: %current_filter%"
+        - "&aClick to switch"
+      action: "filter_toggle"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

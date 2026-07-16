@@ -1,44 +1,98 @@
-name: ALEMCExchange
-version: 1.1.7
-author: Allen_Linong
-main: com.alemcexchange.ALEMCExchangePlugin
-api-version: 1.21
+# ============================================================
+# ALwarp 插件元数据 (plugin.yml)
+# ============================================================
+# 此文件在打包时由 Maven 读取，不要手动修改版本号等关键字段
+# 权限节点的 default 值：true=所有玩家默认拥有、op=仅OP拥有
+# ============================================================
+
+name: ALwarp
+version: 1.2.5
+main: com.alwarp.ALwarp
+api-version: 1.20
 folia-supported: true
+author: Allen_Linong
+website: "QQ:1422163791"
+description: 地标管理插件，支持创建、评分、收费、置顶、黑名单和跨服同步
 
+# 硬依赖 — Vault 经济插件必须安装
+depend: []
+softdepend:
+  - Vault
+  - PlayerPoints
+  - CraftEngine
+  - ItemsAdder
+  - Oraxen
+  - YiyunCEskin
+
+libraries:
+  - org.xerial:sqlite-jdbc:3.42.0.0
+  - com.mysql:mysql-connector-j:8.2.0
+  - com.zaxxer:HikariCP:5.1.0
+  - redis.clients:jedis:5.1.0
+  - com.fasterxml.jackson.core:jackson-databind:2.16.0
+  - org.apache.commons:commons-lang3:3.13.0
+
+# ── 命令注册 ──────────────────────────────────────────────
 commands:
-  alemcexchange:
-    description: Main command for ALEMCExchange
-    usage: /<command> [help|sell|exchange|browse|balance|autosell|pay|reload|give|unlockall]
-    aliases:
-      - alex
-      - aex
+  alwarp:
+    description: 地标管理主命令
+    usage: /<command> [create|admin|reload|export|import|clearpin|purge]
 
+# ── 权限节点 ──────────────────────────────────────────────
 permissions:
-  alemcexchange.use:
-    description: Allow using basic commands
+  # === 基础权限 ===
+  alwarp.use:
+    description: 使用地标基本命令（/alwarp 打开主菜单）
     default: true
-  alemcexchange.admin:
-    description: Allow using admin commands
+  alwarp.create:
+    description: 创建新地标
+    default: true
+  alwarp.edit:
+    description: 编辑已有地标
     default: op
-    children:
-      alemcexchange.use: true
-      alemcexchange.autosell: true
-      alemcexchange.notax: true
-      alemcexchange.vip: true
-      alemcexchange.premium: true
-      alemcexchange.unlockall.auto: true
-  alemcexchange.autosell:
-    description: Allow using auto sell feature
-    default: false
-  alemcexchange.notax:
-    description: No tax when selling
-    default: false
-  alemcexchange.vip:
-    description: VIP status with 3% tax
-    default: false
-  alemcexchange.premium:
-    description: Premium status with 1% tax
-    default: false
-  alemcexchange.unlockall.auto:
-    description: Auto unlock all items
-    default: false
+  alwarp.delete:
+    description: 删除地标
+    default: op
+
+  # === 管理权限 ===
+  alwarp.admin:
+    description: 管理员权限（重载配置、查看统计、在受限世界创建地标等）
+    default: op
+  alwarp.free:
+    description: 免费使用所有地标（跳过付费）
+    default: op
+  alwarp.color.all:
+    description: 拥有所有地标名称/描述颜色权限
+    default: op
+
+  # === 数据管理 ===
+  alwarp.export:
+    description: 导出地标数据到文件
+    default: op
+  alwarp.import:
+    description: 从文件导入地标数据
+    default: op
+
+  # === 数量限制 ===
+  alwarp.bypass.limit:
+    description: 绕过地标数量限制（等同于 alwarp.limit.unlimited）
+    default: op
+  alwarp.limit.unlimited:
+    description: 可创建无限个地标
+    default: op
+  # 按数字限制：alwarp.limit.<数量> 如 alwarp.limit.5 = 可创建5个
+
+  # === 传送延迟 ===
+  alwarp.delay.bypass:
+    description: 跳过传送延迟，立即传送
+    default: op
+  # 按秒数延迟：alwarp.delay.<秒数> 如 alwarp.delay.0 = 立即传送
+
+  # === 税务 ===
+  alwarp.bypass.tax:
+    description: 绕过税务（收入不扣税，等同 alwarp.tax.bypass）
+    default: op
+  alwarp.tax.bypass:
+    description: 完全免税（收入不扣任何手续费）
+    default: op
+  # 按税率：alwarp.tax.<百分比> 如 alwarp.tax.5 = 5%税率

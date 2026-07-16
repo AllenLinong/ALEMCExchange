@@ -1,0 +1,58 @@
+# My Landmarks — manage your own landmarks
+my_landmarks:
+  title: "&aMy Landmarks"
+  shape:
+    - "#########"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N#S#F#Q#P"
+  items:
+    A:
+      type: COMPASS
+      name: "&e%landmark_name%"
+      lore:
+        - "&fDescription"
+        - "&a%landmark_description%"
+        - ""
+        - "&fOwner: %landmark_owner%"
+        - "&fCategory: %landmark_category%"
+        - "&fVisits: %landmark_visits%"
+        - "&fPrice: %landmark_price%"
+        - "&fVisibility: %landmark_private%"
+        - ""
+        - "&aLeft: Teleport"
+        - "&eRight: Manage"
+      action: "teleport:%landmark_id%"
+      right_action: "open_gui:landmark_manage:%landmark_id%"
+    F:
+      type: BOOK
+      name: "&aMain Menu"
+      action: "open_gui:main_menu"
+    S:
+      type: MAP
+      name: "&aManaged Landmarks"
+      lore:
+        - "&aView landmarks where you have manager access"
+      action: "open_gui:managed_landmarks"
+    Q:
+      type: GOLD_INGOT
+      name: "&6Claim Income"
+      lore:
+        - "&fPending: &6%pending_income% coins"
+        - "&fTax rate: &e%income_tax_rate%%"
+        - "&fClaimable: &6%claimable_income% coins"
+        - "&aClick to claim"
+      action: "claim_income"
+    N:
+      type: ARROW
+      name: "&aPrevious (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&aNext (%current_page%/%total_pages%)"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

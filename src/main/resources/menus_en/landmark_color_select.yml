@@ -1,0 +1,416 @@
+landmark_color_select:
+  title: "&aColor Select"
+  shape:
+    - "####C####"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "P###Q##NX"
+  bold:
+    permission: "alwarp.color.bold"
+  items:
+    A:
+      type: PAPER
+      name: "%color_sample%"
+      lore:
+        - "&fTarget: %color_target%"
+        - "&fPreview: %color_sample%"
+        - "&fPermission: %color_permission%"
+        - "%color_purchase_price%"
+        - "%color_purchase_hint%"
+        - "&aClick to use this color"
+      action: "select_landmark_color:%color_id%"
+      shift_right_action: "buy_landmark_color:%color_id%"
+    C:
+      type: ANVIL
+      name: "&aToggle Bold"
+      lore:
+        - "&fTarget: %color_target%"
+        - "&fCurrent font: %color_bold_status%"
+        - "&fPermission: %color_bold_permission%"
+        - "%color_bold_purchase_price%"
+        - "%color_bold_purchase_hint%"
+        - "&aClick to toggle"
+      action: "toggle_landmark_text_bold"
+      shift_right_action: "buy_landmark_bold"
+    Q:
+      type: WHITE_DYE
+      name: "&fUse Default Color"
+      lore:
+        - "&7Clears custom color and bold"
+        - "&aClick to use plugin default color"
+      action: "clear_landmark_color"
+    X:
+      type: BARRIER
+      name: "&cBack"
+      lore:
+        - "&fReturn to landmark management"
+      action: "return_landmark_manage"
+    P:
+      type: ARROW
+      name: "&ePrevious Page"
+      lore:
+        - "&fCurrent: %current_page%/%total_pages%"
+      action: "prev_page"
+    N:
+      type: ARROW
+      name: "&eNext Page"
+      lore:
+        - "&fCurrent: %current_page%/%total_pages%"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "
+  colors:
+    # Solid colors read config.yml landmark.color_system.unlock.color by default: points / 500
+    # Built-in gradients override purchase here: points / 1000
+    # Each color may optionally override the global purchase config:
+    # purchase:
+    #   enabled: true
+    #   currency: "playerpoints" # vault or playerpoints
+    #   price: 1000
+    #   currency_name: "points"
+    black:
+      type: BLACK_DYE
+      name: "&0Black"
+      sample: "Black Preview"
+      color: "&0"
+      permission: "alwarp.color.black"
+    dark_blue:
+      type: BLUE_DYE
+      name: "&1Dark Blue"
+      sample: "Dark Blue Preview"
+      color: "&1"
+      permission: "alwarp.color.dark_blue"
+    dark_green:
+      type: GREEN_DYE
+      name: "&2Dark Green"
+      sample: "Dark Green Preview"
+      color: "&2"
+      permission: "alwarp.color.dark_green"
+    dark_aqua:
+      type: CYAN_DYE
+      name: "&3Dark Aqua"
+      sample: "Dark Aqua Preview"
+      color: "&3"
+      permission: "alwarp.color.dark_aqua"
+    dark_red:
+      type: RED_DYE
+      name: "&4Dark Red"
+      sample: "Dark Red Preview"
+      color: "&4"
+      permission: "alwarp.color.dark_red"
+    dark_purple:
+      type: PURPLE_DYE
+      name: "&5Dark Purple"
+      sample: "Dark Purple Preview"
+      color: "&5"
+      permission: "alwarp.color.dark_purple"
+    gold:
+      type: ORANGE_DYE
+      name: "&6Gold"
+      sample: "Gold Preview"
+      color: "&6"
+      permission: "alwarp.color.gold"
+    gray:
+      type: LIGHT_GRAY_DYE
+      name: "&7Gray"
+      sample: "Gray Preview"
+      color: "&7"
+      permission: "alwarp.color.gray"
+    dark_gray:
+      type: GRAY_DYE
+      name: "&8Dark Gray"
+      sample: "Dark Gray Preview"
+      color: "&8"
+      permission: "alwarp.color.dark_gray"
+    blue:
+      type: LAPIS_LAZULI
+      name: "&9Blue"
+      sample: "Blue Preview"
+      color: "&9"
+      permission: "alwarp.color.blue"
+    green:
+      type: LIME_DYE
+      name: "&aGreen"
+      sample: "Green Preview"
+      color: "&a"
+      permission: "alwarp.color.green"
+    aqua:
+      type: LIGHT_BLUE_DYE
+      name: "&bAqua"
+      sample: "Aqua Preview"
+      color: "&b"
+      permission: "alwarp.color.aqua"
+    red:
+      type: RED_DYE
+      name: "&cRed"
+      sample: "Red Preview"
+      color: "&c"
+      permission: "alwarp.color.red"
+      # Optional: per-color purchase override.
+      # If purchase is omitted, config.yml landmark.color_system.unlock.color is used.
+      # purchase:
+      #   currency: "playerpoints"
+      #   price: 500
+      #   currency_name: "points"
+    pink:
+      type: PINK_DYE
+      name: "&dPink"
+      sample: "Pink Preview"
+      color: "&d"
+      permission: "alwarp.color.pink"
+    yellow:
+      type: YELLOW_DYE
+      name: "&eYellow"
+      sample: "Yellow Preview"
+      color: "&e"
+      permission: "alwarp.color.yellow"
+    white:
+      type: WHITE_DYE
+      name: "&fWhite"
+      sample: "White Preview"
+      color: "&f"
+      permission: "alwarp.color.white"
+    sky_hex:
+      type: CYAN_DYE
+      name: "&bSky Blue"
+      sample: "Sky Blue Preview"
+      color: "#66ccff"
+      permission: "alwarp.color.hex.sky"
+    sunset_gradient:
+      type: MAGENTA_DYE
+      name: "&dSunset Gradient"
+      sample: "Sunset Gradient Preview"
+      gradient:
+        - "#ff7a18"
+        - "#ff2d55"
+        - "#7b2cff"
+      permission: "alwarp.color.gradient.sunset"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    ocean_gradient:
+      type: BLUE_DYE
+      name: "&9Ocean Gradient"
+      sample: "Ocean Gradient Preview"
+      gradient:
+        - "#00c6ff"
+        - "#0072ff"
+      permission: "alwarp.color.gradient.ocean"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    aurora_gradient:
+      type: EMERALD
+      name: "&aAurora Gradient"
+      sample: "Aurora Gradient Preview"
+      gradient:
+        - "#38ef7d"
+        - "#11998e"
+        - "#7f7fd5"
+      permission: "alwarp.color.gradient.aurora"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    candy_gradient:
+      type: PINK_DYE
+      name: "&dCandy Gradient"
+      sample: "Candy Gradient Preview"
+      gradient:
+        - "#ff9a9e"
+        - "#fad0c4"
+        - "#fbc2eb"
+      permission: "alwarp.color.gradient.candy"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    fire_gradient:
+      type: BLAZE_POWDER
+      name: "&6Fire Gradient"
+      sample: "Fire Gradient Preview"
+      gradient:
+        - "#f12711"
+        - "#f5af19"
+        - "#fff200"
+      permission: "alwarp.color.gradient.fire"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    forest_gradient:
+      type: OAK_SAPLING
+      name: "&2Forest Gradient"
+      sample: "Forest Gradient Preview"
+      gradient:
+        - "#56ab2f"
+        - "#a8e063"
+      permission: "alwarp.color.gradient.forest"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    ice_gradient:
+      type: ICE
+      name: "&bIce Gradient"
+      sample: "Ice Gradient Preview"
+      gradient:
+        - "#83a4d4"
+        - "#b6fbff"
+      permission: "alwarp.color.gradient.ice"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    royal_gradient:
+      type: AMETHYST_SHARD
+      name: "&5Starlight Gradient"
+      sample: "Starlight Gradient Preview"
+      gradient:
+        - "#8e2de2"
+        - "#4a00e0"
+        - "#00d4ff"
+      permission: "alwarp.color.gradient.royal"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    rainbow_gradient:
+      type: NETHER_STAR
+      name: "&cRainbow Gradient"
+      sample: "Rainbow Gradient Preview"
+      gradient:
+        - "#ff0000"
+        - "#ff9900"
+        - "#ffff00"
+        - "#33cc33"
+        - "#3399ff"
+        - "#9933ff"
+      permission: "alwarp.color.gradient.rainbow"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    galaxy_gradient:
+      type: ENDER_PEARL
+      name: "&5Galaxy Gradient"
+      sample: "Galaxy Gradient Preview"
+      gradient:
+        - "#0f0c29"
+        - "#302b63"
+        - "#8e2de2"
+        - "#00d4ff"
+      permission: "alwarp.color.gradient.galaxy"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    cherry_gradient:
+      type: PINK_DYE
+      name: "&dCherry Gradient"
+      sample: "Cherry Gradient Preview"
+      gradient:
+        - "#ffafbd"
+        - "#ffc3a0"
+        - "#ff5f9e"
+      permission: "alwarp.color.gradient.cherry"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    mint_gradient:
+      type: SLIME_BALL
+      name: "&aMint Gradient"
+      sample: "Mint Gradient Preview"
+      gradient:
+        - "#00f5a0"
+        - "#00d9f5"
+      permission: "alwarp.color.gradient.mint"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    dawn_gradient:
+      type: GLOWSTONE_DUST
+      name: "&eDawn Gradient"
+      sample: "Dawn Gradient Preview"
+      gradient:
+        - "#f7971e"
+        - "#ffd200"
+        - "#ffffff"
+      permission: "alwarp.color.gradient.dawn"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    twilight_gradient:
+      type: PURPLE_DYE
+      name: "&5Twilight Gradient"
+      sample: "Twilight Gradient Preview"
+      gradient:
+        - "#654ea3"
+        - "#eaafc8"
+      permission: "alwarp.color.gradient.twilight"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    lava_gradient:
+      type: MAGMA_CREAM
+      name: "&6Lava Gradient"
+      sample: "Lava Gradient Preview"
+      gradient:
+        - "#ff512f"
+        - "#dd2476"
+        - "#f09819"
+      permission: "alwarp.color.gradient.lava"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    emerald_gradient:
+      type: EMERALD
+      name: "&aEmerald Gradient"
+      sample: "Emerald Gradient Preview"
+      gradient:
+        - "#00b09b"
+        - "#96c93d"
+      permission: "alwarp.color.gradient.emerald"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    sapphire_gradient:
+      type: DIAMOND
+      name: "&9Sapphire Gradient"
+      sample: "Sapphire Gradient Preview"
+      gradient:
+        - "#1e3c72"
+        - "#2a5298"
+        - "#00c6ff"
+      permission: "alwarp.color.gradient.sapphire"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    neon_gradient:
+      type: REDSTONE
+      name: "&dNeon Gradient"
+      sample: "Neon Gradient Preview"
+      gradient:
+        - "#12c2e9"
+        - "#c471ed"
+        - "#f64f59"
+      permission: "alwarp.color.gradient.neon"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    pearl_gradient:
+      type: QUARTZ
+      name: "&fPearl Gradient"
+      sample: "Pearl Gradient Preview"
+      gradient:
+        - "#f8ffae"
+        - "#43c6ac"
+      permission: "alwarp.color.gradient.pearl"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    bronze_gradient:
+      type: COPPER_INGOT
+      name: "&6Bronze Gradient"
+      sample: "Bronze Gradient Preview"
+      gradient:
+        - "#b79891"
+        - "#94716b"
+        - "#f5af19"
+      permission: "alwarp.color.gradient.bronze"
+      purchase:
+        currency: "playerpoints"
+        price: 1000

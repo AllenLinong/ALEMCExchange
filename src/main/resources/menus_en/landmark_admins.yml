@@ -1,0 +1,39 @@
+# Landmark Admins — manage admin members
+landmark_admins:
+  title: "&aLandmark Admins"
+  shape:
+    - "#########"
+    - "#AAAAAAA#"
+    - "N###T#S#P"
+  items:
+    A:
+      type: PLAYER_HEAD
+      name: "&a%admin_name%"
+      lore:
+        - "&f(%admin_role%)"
+        - "&fShift+LClick to remove"
+      action: ""
+      shift_left_action: "remove_manager:%admin_uuid%"
+    T:
+      type: EMERALD
+      name: "&aAdd Admin"
+      lore:
+        - "&fClick to add a manager"
+      action: "add_manager"
+    S:
+      type: BARRIER
+      name: "&cBack"
+      lore:
+        - "&fReturn to landmark management"
+      action: "return_landmark_manage"
+    N:
+      type: ARROW
+      name: "&aPrevious (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&aNext (%current_page%/%total_pages%)"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

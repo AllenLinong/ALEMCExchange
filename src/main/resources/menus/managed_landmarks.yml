@@ -1,0 +1,45 @@
+# 我管理的地标 —— 管理别人授权给你的地标
+managed_landmarks:
+  title: "&a我管理的地标"
+  shape:
+    - "#########"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N###F###P"
+  items:
+    A:
+      type: COMPASS
+      name: "&e%landmark_name%"
+      lore:
+        - "&6▶ &8描述"
+        - "&a%landmark_description%"
+        - ""
+        - "&6▶ &8地标信息"
+        - "&a▸&7创建玩家：%landmark_owner%"
+        - "&a▸&7地标类型：%landmark_category%"
+        - "&a▸&7访问流量：%landmark_visits% &7次"
+        - "&a▸&7传送价格：%landmark_price%"
+        - "&a▸&7公开状态：%landmark_private%"
+        - ""
+        - "&6▶ &8操作"
+        - "&7•&a鼠标左键&a➤&f传送"
+        - "&7•&e鼠标右键&a➤&f管理地标"
+      action: "teleport:%landmark_id%"
+      right_action: "open_gui:landmark_manage:%landmark_id%"
+    F:
+      type: BOOK
+      name: "&a返回我的地标"
+      action: "open_gui:my_landmarks"
+    N:
+      type: ARROW
+      name: "&a上一页 (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&a下一页 (%current_page%/%total_pages%)"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

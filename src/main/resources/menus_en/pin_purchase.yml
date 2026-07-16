@@ -1,0 +1,36 @@
+pin_purchase:
+  title: "&aBuy Pinned Slot"
+  shape:
+    - "#########"
+    - "####A####"
+    - "##B###C##"
+    - "#########"
+  items:
+    A:
+      type: OAK_SIGN
+      name: "&e%pin_selected_landmark%"
+      lore:
+        - "&fSlot: &e#%pin_slot%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - ""
+        - "&aClick to select one of your landmarks"
+      action: "open_pin_landmark_select"
+    B:
+      type: LIME_WOOL
+      name: "&aConfirm"
+      lore:
+        - "&fLandmark: &e%pin_selected_landmark%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - "&aClicking confirm charges and saves"
+      action: "confirm_pin_purchase"
+    C:
+      type: RED_WOOL
+      name: "&cCancel"
+      lore:
+        - "&7No charge, no save"
+      action: "cancel_pin_purchase"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

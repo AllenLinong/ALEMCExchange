@@ -1,0 +1,67 @@
+# 地标评价 — 查看和删除评价
+# Shift+左键A / 管理员可删除评价；Shift+左键S / 删除自己的评价
+landmark_reviews:
+  title: "&a地标评价"
+  shape:
+    - "####W####"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N#B#F#S#P"
+  items:
+    W:
+      type: BOOK
+      name: "&e%landmark_name%"
+      lore:
+        - "&f拥有者：&e%landmark_owner%"
+        - "&f分类：&e%landmark_category%"
+        - "&f描述"
+        - "&a%landmark_description%"
+        - "&f综合评分：&e%landmark_rating%"
+        - "&f评价数：&e%rating_count%"
+    A:
+      type: PLAYER_HEAD
+      name: "&e%review_player%"
+      lore:
+        - "&f评分：%review_score%"
+        - "&f评价："
+        - "%review_comment%"
+        - ""
+        - "&f日期：%review_date%"
+        - "&f时间：%review_time%"
+        - "%review_report_hint%"
+    F:
+      type: BOOK
+      name: "&a返回主菜单"
+      action: "open_gui:main_menu"
+    B:
+      type: BOOK
+      name: "&a评分与评价"
+      lore:
+        - "&a点击为这个地标评分与评价"
+      action: "rate_current_landmark"
+    S:
+      type: WRITABLE_BOOK
+      name: "&e我的评价"
+      lore:
+        - "&f评分：%own_review_score%"
+        - "&f评价："
+        - "%own_review_comment%"
+        - "&f日期：%own_review_date%"
+        - "&f时间：%own_review_time%"
+        - ""
+        - "%own_review_delete_hint%"
+        - "%own_review_delete_note%"
+      shift_left_action: "delete_own_review"
+    N:
+      type: ARROW
+      name: "&a上一页 (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&a下一页 (%current_page%/%total_pages%)"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

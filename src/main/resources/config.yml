@@ -1,64 +1,169 @@
-# 调试功能
-debug:
-  enabled: false  # 是否开启调试模式
-  level: info  # 调试级别：info, debug, trace
+# ============================================================
+# ALwarp 主配置文件 (config.yml)
+# ============================================================
+# 此文件控制插件的核心功能参数。
+# 跨服相关的数据库/Redis配置已拆分到 database.yml
+# GUI菜单配置已拆分到 menus/ 目录下的各个yml文件
+# 多语言文件：messages_zh.yml / messages_en.yml、menus/ / menus_en/
+# ============================================================
 
-# 数据库配置
-database:
-  type: sqlite  # 数据库类型：sqlite 或 mysql
-  mysql:  # MySQL 数据库配置（当 type 为 mysql 时使用）
-    host: localhost  # MySQL 主机地址
-    port: 3306  # MySQL 端口
-    database: minecraft  # MySQL 数据库名称
-    user: root  # MySQL 用户名
-    password: ''  # MySQL 密码
-    connection-parameters: "?autoReconnect=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8"  # 连接参数
-    pool-settings:  # 连接池设置
-      max-pool-size: 10  # 最大连接数
-      min-idle: 5  # 最小空闲连接数
-      max-lifetime: 1800000  # 连接最大生命周期（毫秒）
-      keep-alive-time: 60000  # 连接保持时间（毫秒）
-      time-out: 30000  # 连接超时时间（毫秒）
-  table_prefix: 'alembc_'  # 表名前缀，用于避免表名冲突
-  sqlite:  # SQLite 数据库配置（当 type 为 sqlite 时使用）
-    file: 'alembc.db'  # SQLite 数据库文件名称
+# ── 语言设置 ──────────────────────────────────────────────
+# 插件界面和消息的语言：zh_CN = 简体中文、en_US = English
+# 切换语言后需重载配置：/alwarp reload
+language: "zh_CN"
 
-# 默认税率配置
-sell_tax: 0.05  # 默认税率 5%
+# ── 自定义命令设置 ────────────────────────────────────────
+# 是否启用插件自定义根命令。
+# 下方 aliases 中的命令会完全等同于 /alwarp，例如 /pw、/pw create、/pw reload。
+# 修改后需重载配置：/alwarp reload
+custom_commands:
+  enabled: true
+  aliases: []
 
-# 不同权限的税率配置
-tax_rates:
-  alemcexchange.vip: 0.03  # VIP 3% 税率
-  alemcexchange.premium: 0.01  # 高级用户 1% 税率
-  alemcexchange.notax: 0.0  # 无税率
+# ── 时间设置 ──────────────────────────────────────────────
+# 评论、菜单等时间显示使用的时区。
+# 默认使用中国北京时间（Asia/Shanghai）。
+# 可填写 Java ZoneId，例如 Asia/Shanghai、America/New_York、Europe/London、UTC。
+# 修改后需重载配置：/alwarp reload
+time:
+  timezone: "Asia/Shanghai"
 
-# 功能开关
-features:
-  auto_sell: true  # 是否开启自动出售功能
+# ── GUI点击限制 ────────────────────────────────────────────
+# 限制玩家点击 GUI 图标按钮的频率，防止鼠标连点器疯狂触发菜单动作。
+# 单位：秒。默认 0.5 秒 = 10 tick；设为 0 则关闭此限制。
+gui:
+  button_click_cooldown_seconds: 0.5
 
-# 自动出售相关设置
-autosell:
-  send_message: true  # 自动出售时是否发送提示消息
-  batch_threshold: 64  # 批量出售阈值，达到此数量才自动出售
 
-# 每日EMC获取限制
-daily_limit:
-  enabled: false  # 是否开启每日EMC获取限制
-  reset_time: "00:00"  # 每日重置时间（服务器时间，格式 HH:mm）
-  default_limit: 10000  # 默认每日EMC获取上限（无特殊权限的玩家）
-  permissions:  # 不同权限的每日EMC获取上限，-1表示不限制
-    alemcexchange.daily.vip: 50000
-    alemcexchange.daily.premium: 100000
-    alemcexchange.daily.unlimited: -1
+# ── 服务器标识 ────────────────────────────────────────────
+# 跨服传送时的唯一标识，必须跟 BungeeCord/Velocity 配置一致
+# 单服部署可保持默认值
+# 重要：BC服必须先配置完此值再开始添加地标！
+serverid: "server"
+# 这个服务器显示的名字，仅用于菜单和消息展示
+serverName: "一号服务器"
 
-# 权限说明
-# alemcexchange.use - 基础使用权限（默认所有玩家拥有）
-# alemcexchange.admin - 管理员权限，用于执行reload、give命令和解锁其他玩家的所有物品
-# alemcexchange.autosell - 允许使用自动出售功能
-# alemcexchange.notax - 无税率权限
-# alemcexchange.vip - VIP权限，3%税率
-# alemcexchange.premium - 高级用户权限，1%税率
-# alemcexchange.unlockall.auto - 自动解锁所有物品（无需执行命令）
-# alemcexchange.daily.vip - VIP每日限额权限
-# alemcexchange.daily.premium - 高级用户每日限额权限
-# alemcexchange.daily.unlimited - 无限每日限额权限
+# 子服地标访问权限（跨服服务器使用）。
+# enabled: false = 关闭限制，所有玩家都可以看到并传送到其他子服的地标。
+# enabled: true  = 开启限制，下面 servers 里配置了权限的子服，玩家必须有对应权限才能看到和传送。
+# servers 写法：子服ID: "权限节点"
+# 例：server: "alwarp.server.default" 表示 server 子服需要 alwarp.server.default 权限。
+# 权限留空 "" 表示该子服不限制权限，也就是所有玩家都可以访问。
+# OP 或拥有 alwarp.admin 权限的玩家会绕过这个限制。
+server_permissions:
+  enabled: false
+  servers:
+    server: ""
+
+
+# ── 经济设置 ──────────────────────────────────────────────
+# 所有费用均使用 Vault 经济插件的货币单位
+economy:
+  # 创建地标的费用，设为 0 则免费创建
+  create_cost: 1000.0
+  # 地标拥有者可设置的最低传送价格
+  minimum_price: 0.0
+  # 地标拥有者可设置的最高传送价格
+  maximum_price: 10000.0
+  # 传送费用大于等于此金额时，需要在聊天中二次确认；0 或负数 = 关闭二次确认
+  teleport_confirm_threshold: 50.0
+  # 是否允许地标拥有者/地标管理员传送自己拥有或管理的地标时免费
+  # true = 拥有者和地标管理员免费；false = 拥有者和地标管理员也按价格收费
+  # 注意：OP、拥有 alwarp.admin / alwarp.free 权限的玩家，始终免费传送
+  managed_landmark_free_teleport: false
+
+# ── 税务设置 ──────────────────────────────────────────────
+# 从地标拥有者收入中抽取的手续费，税率基于拥有者权限（取最小值）
+#   alwarp.tax.bypass → 0%免税
+#   alwarp.tax.<百分比> → 指定税率，如 alwarp.tax.5 = 5%
+tax:
+  # 是否启用税务系统
+  enabled: true
+  # 默认税率（0.1 = 10%，实际收入 = 传送费 × (1 - rate)）
+  rate: 0.1
+  # 最低税额，防止小额交易无税可收
+  minimum_tax: 0.01
+
+# ── 评分设置 ──────────────────────────────────────────────
+# 玩家对地标的1-5星评分
+rating:
+  # 是否启用评分系统
+  enabled: true
+  # 最低评分
+  min_score: 1
+  # 最高评分
+  max_score: 5
+  # 评分冷却时间（秒），防止刷分；0 = 不限制
+  cooldown_seconds: 30
+  # 评价最少字符数
+  min_comment_length: 3
+  # 评价最多字符数，超过会提示玩家重新输入；0 = 不限制
+  max_comment_length: 50
+  # 评价在菜单中每行显示多少个字符后自动换行；0 = 不自动换行
+  review_wrap_width: 10
+  # 评论举报设置
+  report:
+    # 是否启用评论举报；关闭后评论下方不显示举报提示，Shift+右键也无法举报
+    enabled: true
+    # 同一条评论被多少个不同玩家举报后自动删除该评论和评分
+    delete_threshold: 3
+
+# ── 地标设置 ──────────────────────────────────────────────
+landmark:
+  # 每位玩家默认可创建的地标数量上限（无特殊权限时）
+  # 特殊上限通过权限控制：alwarp.limit.<数量>、alwarp.limit.unlimited
+  default_limit: 3
+  # 地标描述最大字符数（超过会提示玩家重新输入）
+  max_description_length: 50
+  # 地标描述在菜单中每行显示多少个字符后自动换行；0 = 不自动换行
+  description_wrap_width: 10
+  # 地标名称最大字符数
+  max_name_length: 8
+  # 名称/描述颜色系统。
+  # true = 地标管理菜单显示右键设置颜色，并渲染已设置的颜色、渐变、加粗。
+  # false = 隐藏右键设置颜色入口，右键不会打开颜色菜单，已保存颜色也不渲染。
+  color_system:
+    enabled: true
+    unlock:
+      # 是否允许玩家在颜色菜单中购买颜色/加粗解锁。
+      enabled: true
+      currencies:
+        vault:
+          # Vault 货币显示名，可改成 B币、金币、硬币等。
+          name: "金币"
+        playerpoints:
+          # PlayerPoints 货币显示名，可改成 宝石、点券、积分等。
+          name: "点券"
+      color:
+        # 基础颜色的默认购买配置。
+        # 如果 landmark-color-select.yml 里某个颜色没有写 purchase，就使用这里的默认值。
+        enabled: true
+        # 货币类型：playerpoints = 点券，vault = Vault 金币。
+        currency: "playerpoints"
+        # 默认购买价格。
+        price: 500
+      bold:
+        # 加粗字体的默认购买配置。
+        enabled: true
+        # 货币类型：playerpoints = 点券，vault = Vault 金币。
+        currency: "playerpoints"
+        # 加粗购买价格。
+        price: 500
+      permission_grant:
+        # 购买颜色/加粗后，由控制台执行授权命令。
+        # 默认适配 LuckPerms；如果你的权限插件命令不同，改这里即可。
+        # 可用变量：%player%、%uuid%、%permission%、%unlock_name%、%unlock_type%、%color_id%
+        commands:
+          - "lp user %player% permission set %permission% true"
+  # 创建地标时的默认图标（Minecraft Material 名称）
+  default_icon: "PLAYER_HEAD"
+  # 地标名称是否必须唯一（true=不允许重名）
+  name_unique: true
+  # 点击传送后的等待时间（秒），0=立即传送
+  # 特殊延迟通过权限控制：alwarp.delay.<秒数>、alwarp.delay.bypass
+  teleport_delay: 3
+  # 是否允许在本服创建地标（false = 本服完全禁止创建，多服部署时使用）
+  allow_create: true
+  # 禁止普通玩家创建地标的世界（管理员不受限制）
+  # 示例：限制地狱和末地 →  - "world_nether" / - "world_the_end"
+  restricted_worlds: []

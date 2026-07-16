@@ -1,0 +1,33 @@
+# Category Select — filter landmarks by category
+category_select:
+  title: "&aCategories"
+  shape:
+    - "#########"
+    - "#A#B#C#D#"
+    - "####E####"
+    - "#########"
+  items:
+    A:
+      type: WHEAT
+      name: "&aFarm"
+      action: "filter:1"
+    B:
+      type: CHEST
+      name: "&6Shop"
+      action: "filter:2"
+    C:
+      type: DIAMOND_SWORD
+      name: "&cArena"
+      action: "filter:3"
+    D:
+      type: BRICK
+      name: "&bBuild"
+      action: "filter:4"
+    E:
+      type: MAP
+      name: "&7Other"
+      action: "filter:5"
+      default: true
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

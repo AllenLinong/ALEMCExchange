@@ -1,0 +1,66 @@
+# 我的收藏 - 显示已收藏的地标
+my_favorites:
+  title: "&a我的收藏"
+  shape:
+    - "#########"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N#Q#F#S#P"
+  items:
+    A:
+      type: COMPASS
+      name: "&e%landmark_name%"
+      lore:
+        - "&6▶ &8描述"
+        - "&a%landmark_description%"
+        - ""
+        - "&6▶ &8地标信息"
+        - "&a▸&7地标类型：%landmark_category%"
+        - "&a▸&7访问流量：%landmark_visits% &7次"
+        - "&a▸&7创建玩家：%landmark_owner%"
+        - "&a▸&7创建日期：%landmark_date%"
+        - "&a▸&7地标评分：%landmark_rating%"
+        - "&a▸&7收藏热度：%landmark_weekly%"
+        - "&a▸&7传送价格：%landmark_price%"
+        - "&a▸&7所在服区：%landmark_server%"
+        - ""
+        - "&6▶ &8操作"
+        - "&7•&a鼠标左键&a➤&f传送"
+        - "&7•&e鼠标右键&a➤&7取消收藏"
+        - "&7•&bShift+左键&a➤&f查看评论"
+      action: "teleport:%landmark_id%"
+      right_action: "toggle_favorite:%landmark_id%"
+      shift_left_action: "view_reviews:%landmark_id%"
+    N:
+      type: ARROW
+      name: "&a上一页 (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&a下一页 (%current_page%/%total_pages%)"
+      action: "next_page"
+    Q:
+      type: COMPASS
+      name: "&a搜索"
+      lore:
+        - "&f当前搜索：%current_search%"
+        - "&a左键 搜索"
+        - "&e右键 清除搜索"
+      action: "search"
+      right_action: "clear_search"
+    F:
+      type: BOOK
+      name: "&a分类切换"
+      lore:
+        - "&f当前：%current_filter%"
+        - "&a点击切换分类"
+      action: "filter_toggle"
+    S:
+      type: NETHER_STAR
+      name: "&a返回主菜单"
+      action: "open_gui:main_menu"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

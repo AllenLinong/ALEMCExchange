@@ -1,0 +1,110 @@
+# 地标管理 — 编辑单个地标的属性
+landmark_manage:
+  title: "&a地标管理"
+  admin_title: "&a他人地标管理"
+  shape:
+    - "####Z####"
+    - "#A#S#W#O#"
+    - "#B#C#D#E#"
+    - "H###Q###X"
+  admin_shape:
+    - "####Z####"
+    - "#A##W##O#"
+    - "#B##C##D#"
+    - "####Q###X"
+  items:
+    Z:
+      type: ENDER_PEARL
+      name: "&a设置传送点"
+      lore:
+        - "&f当前服务器：%landmark_server%"
+        - "&f当前坐标点：%landmark_location%"
+        - "&f当前世界类型：%landmark_world%"
+        - "&a点击设置为你当前所在位置"
+      action: "set_location"
+    A:
+      type: NAME_TAG
+      name: "&a设置地标名称"
+      lore:
+        - "&f当前名字："
+        - "%landmark_name%"
+        - "&a左键 修改名称"
+        - "&e右键 设置名称颜色"
+      action: "set_name"
+      right_action: "open_landmark_color:name"
+    S:
+      type: PLAYER_HEAD
+      name: "&a管理员列表"
+      lore:
+        - "&a点击管理管理员"
+        - "&a添加或删除管理员后"
+        - "&a必须返回主界面保存"
+      action: "open_admin_interface"
+    W:
+      type: ITEM_FRAME
+      name: "&a设置地标图标"
+      lore:
+        - "&a手持物品后点击设置"
+      action: "set_icon"
+    O:
+      type: OAK_DOOR
+      name: "&a私有设置"
+      lore:
+        - "&f当前：%landmark_private%"
+        - "&7私有后仅拥有者、地标管理员和OP可见"
+        - "&7开启私有会清空此地标的所有收藏"
+        - "&a点击切换"
+      action: "toggle_private"
+    B:
+      type: PAPER
+      name: "&a设置地标描述"
+      lore:
+        - "&f当前描述："
+        - "%landmark_description%"
+        - "&a左键 修改描述"
+        - "&e右键 设置描述颜色"
+      action: "set_description"
+      right_action: "open_landmark_color:description"
+    C:
+      type: BOOKSHELF
+      name: "&a设置地标分类"
+      lore:
+        - "&f当前：%landmark_category%"
+        - "&a点击切换分类"
+      action: "set_category"
+    D:
+      type: GOLD_INGOT
+      name: "&a设置传送费用"
+      lore:
+        - "&f当前：%landmark_price%"
+        - "&a点击修改价格"
+      action: "set_price"
+    E:
+      type: RED_WOOL
+      name: "&c删除地标"
+      lore:
+        - "&c点击删除此地标"
+        - "&c此操作不可撤销！"
+      action: "delete_landmark"
+    H:
+      type: BLACK_BANNER
+      name: "&c黑名单"
+      lore:
+        - "&f点击管理此地标的黑名单"
+        - "&7黑名单玩家无法传送、收藏或评论"
+      action: "open_blacklist_interface"
+    Q:
+      type: GREEN_WOOL
+      name: "&a确认保存"
+      lore:
+        - "&a点击保存所有修改"
+      action: "save_landmark"
+    X:
+      type: BARRIER
+      name: "&c取消"
+      lore:
+        - "&f返回我的地标"
+      action: "open_gui:my_landmarks"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

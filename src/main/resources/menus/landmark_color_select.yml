@@ -1,0 +1,416 @@
+landmark_color_select:
+  title: "&a颜色选择"
+  shape:
+    - "####C####"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "P###Q##NX"
+  bold:
+    permission: "alwarp.color.bold"
+  items:
+    A:
+      type: PAPER
+      name: "%color_sample%"
+      lore:
+        - "&f目标：%color_target%"
+        - "&f预览：%color_sample%"
+        - "&f权限：%color_permission%"
+        - "%color_purchase_price%"
+        - "%color_purchase_hint%"
+        - "&a点击使用此颜色"
+      action: "select_landmark_color:%color_id%"
+      shift_right_action: "buy_landmark_color:%color_id%"
+    C:
+      type: ANVIL
+      name: "&a切换加粗"
+      lore:
+        - "&f目标：%color_target%"
+        - "&f当前字体：%color_bold_status%"
+        - "&f权限：%color_bold_permission%"
+        - "%color_bold_purchase_price%"
+        - "%color_bold_purchase_hint%"
+        - "&a点击切换"
+      action: "toggle_landmark_text_bold"
+      shift_right_action: "buy_landmark_bold"
+    Q:
+      type: WHITE_DYE
+      name: "&f使用默认颜色"
+      lore:
+        - "&7清除自定义颜色和加粗"
+        - "&a点击使用插件默认颜色"
+      action: "clear_landmark_color"
+    X:
+      type: BARRIER
+      name: "&c返回"
+      lore:
+        - "&f返回地标管理"
+      action: "return_landmark_manage"
+    P:
+      type: ARROW
+      name: "&e上一页"
+      lore:
+        - "&f当前：%current_page%/%total_pages%"
+      action: "prev_page"
+    N:
+      type: ARROW
+      name: "&e下一页"
+      lore:
+        - "&f当前：%current_page%/%total_pages%"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "
+  colors:
+    # 基础颜色默认读取 config.yml 的 landmark.color_system.unlock.color：点券 / 500
+    # 内置渐变色在本菜单里使用 purchase 覆盖为：点券 / 1000
+    # 每个颜色都可以可选覆盖全局购买配置：
+    # purchase:
+    #   enabled: true
+    #   currency: "playerpoints" # vault 或 playerpoints
+    #   price: 1000
+    #   currency_name: "点券"    # 可改成 B币、宝石等
+    black:
+      type: BLACK_DYE
+      name: "&0黑色"
+      sample: "黑色预览"
+      color: "&0"
+      permission: "alwarp.color.black"
+    dark_blue:
+      type: BLUE_DYE
+      name: "&1深蓝"
+      sample: "深蓝预览"
+      color: "&1"
+      permission: "alwarp.color.dark_blue"
+    dark_green:
+      type: GREEN_DYE
+      name: "&2深绿"
+      sample: "深绿预览"
+      color: "&2"
+      permission: "alwarp.color.dark_green"
+    dark_aqua:
+      type: CYAN_DYE
+      name: "&3深青"
+      sample: "深青预览"
+      color: "&3"
+      permission: "alwarp.color.dark_aqua"
+    dark_red:
+      type: RED_DYE
+      name: "&4深红"
+      sample: "深红预览"
+      color: "&4"
+      permission: "alwarp.color.dark_red"
+    dark_purple:
+      type: PURPLE_DYE
+      name: "&5深紫"
+      sample: "深紫预览"
+      color: "&5"
+      permission: "alwarp.color.dark_purple"
+    gold:
+      type: ORANGE_DYE
+      name: "&6金色"
+      sample: "金色预览"
+      color: "&6"
+      permission: "alwarp.color.gold"
+    gray:
+      type: LIGHT_GRAY_DYE
+      name: "&7灰色"
+      sample: "灰色预览"
+      color: "&7"
+      permission: "alwarp.color.gray"
+    dark_gray:
+      type: GRAY_DYE
+      name: "&8深灰"
+      sample: "深灰预览"
+      color: "&8"
+      permission: "alwarp.color.dark_gray"
+    blue:
+      type: LAPIS_LAZULI
+      name: "&9蓝色"
+      sample: "蓝色预览"
+      color: "&9"
+      permission: "alwarp.color.blue"
+    green:
+      type: LIME_DYE
+      name: "&a绿色"
+      sample: "绿色预览"
+      color: "&a"
+      permission: "alwarp.color.green"
+    aqua:
+      type: LIGHT_BLUE_DYE
+      name: "&b青色"
+      sample: "青色预览"
+      color: "&b"
+      permission: "alwarp.color.aqua"
+    red:
+      type: RED_DYE
+      name: "&c红色"
+      sample: "红色预览"
+      color: "&c"
+      permission: "alwarp.color.red"
+      # 可选：单独设置这个颜色的购买配置。
+      # 不写 purchase 时，会使用 config.yml 里的 landmark.color_system.unlock.color 默认价格。
+      # purchase:
+      #   currency: "playerpoints"
+      #   price: 500
+      #   currency_name: "点券"
+    pink:
+      type: PINK_DYE
+      name: "&d粉色"
+      sample: "粉色预览"
+      color: "&d"
+      permission: "alwarp.color.pink"
+    yellow:
+      type: YELLOW_DYE
+      name: "&e黄色"
+      sample: "黄色预览"
+      color: "&e"
+      permission: "alwarp.color.yellow"
+    white:
+      type: WHITE_DYE
+      name: "&f白色"
+      sample: "白色预览"
+      color: "&f"
+      permission: "alwarp.color.white"
+    sky_hex:
+      type: CYAN_DYE
+      name: "&b天蓝"
+      sample: "天蓝预览"
+      color: "#66ccff"
+      permission: "alwarp.color.hex.sky"
+    sunset_gradient:
+      type: MAGENTA_DYE
+      name: "&d日落渐变"
+      sample: "日落渐变预览"
+      gradient:
+        - "#ff7a18"
+        - "#ff2d55"
+        - "#7b2cff"
+      permission: "alwarp.color.gradient.sunset"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    ocean_gradient:
+      type: BLUE_DYE
+      name: "&9海洋渐变"
+      sample: "海洋渐变预览"
+      gradient:
+        - "#00c6ff"
+        - "#0072ff"
+      permission: "alwarp.color.gradient.ocean"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    aurora_gradient:
+      type: EMERALD
+      name: "&a极光渐变"
+      sample: "极光渐变预览"
+      gradient:
+        - "#38ef7d"
+        - "#11998e"
+        - "#7f7fd5"
+      permission: "alwarp.color.gradient.aurora"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    candy_gradient:
+      type: PINK_DYE
+      name: "&d糖果渐变"
+      sample: "糖果渐变预览"
+      gradient:
+        - "#ff9a9e"
+        - "#fad0c4"
+        - "#fbc2eb"
+      permission: "alwarp.color.gradient.candy"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    fire_gradient:
+      type: BLAZE_POWDER
+      name: "&6烈焰渐变"
+      sample: "烈焰渐变预览"
+      gradient:
+        - "#f12711"
+        - "#f5af19"
+        - "#fff200"
+      permission: "alwarp.color.gradient.fire"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    forest_gradient:
+      type: OAK_SAPLING
+      name: "&2森林渐变"
+      sample: "森林渐变预览"
+      gradient:
+        - "#56ab2f"
+        - "#a8e063"
+      permission: "alwarp.color.gradient.forest"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    ice_gradient:
+      type: ICE
+      name: "&b冰霜渐变"
+      sample: "冰霜渐变预览"
+      gradient:
+        - "#83a4d4"
+        - "#b6fbff"
+      permission: "alwarp.color.gradient.ice"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    royal_gradient:
+      type: AMETHYST_SHARD
+      name: "&5星辉渐变"
+      sample: "星辉渐变预览"
+      gradient:
+        - "#8e2de2"
+        - "#4a00e0"
+        - "#00d4ff"
+      permission: "alwarp.color.gradient.royal"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    rainbow_gradient:
+      type: NETHER_STAR
+      name: "&c彩虹渐变"
+      sample: "彩虹渐变预览"
+      gradient:
+        - "#ff0000"
+        - "#ff9900"
+        - "#ffff00"
+        - "#33cc33"
+        - "#3399ff"
+        - "#9933ff"
+      permission: "alwarp.color.gradient.rainbow"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    galaxy_gradient:
+      type: ENDER_PEARL
+      name: "&5银河渐变"
+      sample: "银河渐变预览"
+      gradient:
+        - "#0f0c29"
+        - "#302b63"
+        - "#8e2de2"
+        - "#00d4ff"
+      permission: "alwarp.color.gradient.galaxy"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    cherry_gradient:
+      type: PINK_DYE
+      name: "&d樱花渐变"
+      sample: "樱花渐变预览"
+      gradient:
+        - "#ffafbd"
+        - "#ffc3a0"
+        - "#ff5f9e"
+      permission: "alwarp.color.gradient.cherry"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    mint_gradient:
+      type: SLIME_BALL
+      name: "&a薄荷渐变"
+      sample: "薄荷渐变预览"
+      gradient:
+        - "#00f5a0"
+        - "#00d9f5"
+      permission: "alwarp.color.gradient.mint"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    dawn_gradient:
+      type: GLOWSTONE_DUST
+      name: "&e晨曦渐变"
+      sample: "晨曦渐变预览"
+      gradient:
+        - "#f7971e"
+        - "#ffd200"
+        - "#ffffff"
+      permission: "alwarp.color.gradient.dawn"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    twilight_gradient:
+      type: PURPLE_DYE
+      name: "&5暮光渐变"
+      sample: "暮光渐变预览"
+      gradient:
+        - "#654ea3"
+        - "#eaafc8"
+      permission: "alwarp.color.gradient.twilight"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    lava_gradient:
+      type: MAGMA_CREAM
+      name: "&6熔岩渐变"
+      sample: "熔岩渐变预览"
+      gradient:
+        - "#ff512f"
+        - "#dd2476"
+        - "#f09819"
+      permission: "alwarp.color.gradient.lava"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    emerald_gradient:
+      type: EMERALD
+      name: "&a翡翠渐变"
+      sample: "翡翠渐变预览"
+      gradient:
+        - "#00b09b"
+        - "#96c93d"
+      permission: "alwarp.color.gradient.emerald"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    sapphire_gradient:
+      type: DIAMOND
+      name: "&9蓝宝石渐变"
+      sample: "蓝宝石渐变预览"
+      gradient:
+        - "#1e3c72"
+        - "#2a5298"
+        - "#00c6ff"
+      permission: "alwarp.color.gradient.sapphire"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    neon_gradient:
+      type: REDSTONE
+      name: "&d霓虹渐变"
+      sample: "霓虹渐变预览"
+      gradient:
+        - "#12c2e9"
+        - "#c471ed"
+        - "#f64f59"
+      permission: "alwarp.color.gradient.neon"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    pearl_gradient:
+      type: QUARTZ
+      name: "&f珍珠渐变"
+      sample: "珍珠渐变预览"
+      gradient:
+        - "#f8ffae"
+        - "#43c6ac"
+      permission: "alwarp.color.gradient.pearl"
+      purchase:
+        currency: "playerpoints"
+        price: 1000
+    bronze_gradient:
+      type: COPPER_INGOT
+      name: "&6青铜渐变"
+      sample: "青铜渐变预览"
+      gradient:
+        - "#b79891"
+        - "#94716b"
+        - "#f5af19"
+      permission: "alwarp.color.gradient.bronze"
+      purchase:
+        currency: "playerpoints"
+        price: 1000

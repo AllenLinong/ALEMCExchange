@@ -1,0 +1,224 @@
+﻿# Main Menu 鈥?browse all landmarks
+# Menu icon formats:
+# 1. Vanilla item:
+#    type: BEACON
+# 2. Resource-pack CustomModelData:
+#    type: PAPER
+#    custom_model_data: 10001
+# 3. CraftEngine custom item (recommended):
+#    craftengine: "namespace:item_id"
+# 4. ItemsAdder custom item:
+#    itemsadder: "namespace:item_id"
+# 5. Oraxen custom item:
+#    oraxen: "item_id"
+# Backward-compatible formats:
+#    plugin_item: "ce:namespace:item_id"
+#    plugin_item: "ia:namespace:item_id"
+#    plugin_item: "oraxen:item_id"
+#    type: "ce:namespace:item_id"
+# Use normal ASCII colons ":" in item ids.
+main_menu:
+  title: "&aLandmarks"
+  shape:
+    - "####W####"
+    - "#1234567#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N#Q#FSC#P"
+  items:
+    W:
+      type: BEACON
+      name: "&aMy Landmarks"
+      lore:
+        - "&fView & manage your landmarks"
+      action: "open_gui:my_landmarks"
+    # Pinned slot button config:
+    # - The number of buttons with pin_slot: true in shape is the number of pinned slots.
+    # - pin_slot_id is the unique slot id; do not duplicate it when adding more slots.
+    # - Clicking an empty pinned slot opens the purchase menu; only confirm charges and saves.
+    # - cost is the price for this slot, duration_days starts counting from purchase success.
+    # - Expired pins are removed automatically and the slot becomes available again.
+    # - Occupied pinned slots use left click to teleport, right click to favorite, Shift+left to view reviews.
+    1:
+      type: OAK_SIGN
+      name: "&6Pinned Slot #1"
+      lore:
+        - "&fStatus: %pin_status%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - "&fExpires: &e%pin_expires%"
+        - "&aClick to buy or use this slot"
+      # Marks this button as a pinned slot; custom added pinned slots must set this to true.
+      pin_slot: true
+      # Unique pinned slot id; do not duplicate it when adding more slots.
+      pin_slot_id: 1
+      # Left click: empty slot opens purchase menu; occupied slot teleports to the landmark.
+      action: "pin_slot:%pin_slot%"
+      # Right click: occupied slot favorites/unfavorites the landmark; empty slot opens purchase menu.
+      right_action: "pin_slot_favorite:%pin_slot%"
+      # Shift+left click: occupied slot opens reviews; empty slot opens purchase menu.
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      # Price charged for this pinned slot. It is charged only after confirming purchase.
+      cost: 1000.0
+      # Pin duration in days, counted from successful purchase time.
+      duration_days: 7
+    2:
+      type: OAK_SIGN
+      name: "&6Pinned Slot #2"
+      lore:
+        - "&fStatus: %pin_status%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - "&fExpires: &e%pin_expires%"
+        - "&aClick to buy or use this slot"
+      pin_slot: true
+      pin_slot_id: 2
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    3:
+      type: OAK_SIGN
+      name: "&6Pinned Slot #3"
+      lore:
+        - "&fStatus: %pin_status%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - "&fExpires: &e%pin_expires%"
+        - "&aClick to buy or use this slot"
+      pin_slot: true
+      pin_slot_id: 3
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    4:
+      type: OAK_SIGN
+      name: "&6Pinned Slot #4"
+      lore:
+        - "&fStatus: %pin_status%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - "&fExpires: &e%pin_expires%"
+        - "&aClick to buy or use this slot"
+      pin_slot: true
+      pin_slot_id: 4
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    5:
+      type: OAK_SIGN
+      name: "&6Pinned Slot #5"
+      lore:
+        - "&fStatus: %pin_status%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - "&fExpires: &e%pin_expires%"
+        - "&aClick to buy or use this slot"
+      pin_slot: true
+      pin_slot_id: 5
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    6:
+      type: OAK_SIGN
+      name: "&6Pinned Slot #6"
+      lore:
+        - "&fStatus: %pin_status%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - "&fExpires: &e%pin_expires%"
+        - "&aClick to buy or use this slot"
+      pin_slot: true
+      pin_slot_id: 6
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    7:
+      type: OAK_SIGN
+      name: "&6Pinned Slot #7"
+      lore:
+        - "&fStatus: %pin_status%"
+        - "&fCost: &6%pin_cost% coins"
+        - "&fDuration: &e%pin_days% days"
+        - "&fExpires: &e%pin_expires%"
+        - "&aClick to buy or use this slot"
+      pin_slot: true
+      pin_slot_id: 7
+      action: "pin_slot:%pin_slot%"
+      right_action: "pin_slot_favorite:%pin_slot%"
+      shift_left_action: "pin_slot_reviews:%pin_slot%"
+      cost: 1000.0
+      duration_days: 7
+    A:
+      type: COMPASS
+      name: "&e%landmark_name%"
+      lore:
+        - "&fDescription"
+        - "&a%landmark_description%"
+        - ""
+        - "&fCategory: %landmark_category%"
+        - "&fVisits: %landmark_visits%"
+        - "&fOwner: %landmark_owner%"
+        - "&fCreated: %landmark_date%"
+        - "&fRating: %landmark_rating%"
+        - "&fFavorite heat: %landmark_weekly%"
+        - "&fPrice: %landmark_price%"
+        - "&fServer: %landmark_server%"
+        - ""
+        - "&aLeft: Teleport"
+        - "&eRight: %favorite_action_en%"
+        - "&bShift+Left: Reviews"
+      action: "teleport:%landmark_id%"
+      right_action: "toggle_favorite:%landmark_id%"
+      shift_left_action: "view_reviews:%landmark_id%"
+    N:
+      type: ARROW
+      name: "&aPrevious (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&aNext (%current_page%/%total_pages%)"
+      action: "next_page"
+    Q:
+      type: COMPASS
+      name: "&aSearch"
+      lore:
+        - "&fSearching: %current_search%"
+        - "&aLeft: Search"
+        - "&eRight: Clear"
+      action: "search"
+      right_action: "clear_search"
+    F:
+      type: BOOK
+      name: "&aFilter"
+      lore:
+        - "&fCurrent: %current_filter%"
+        - "&aClick to switch"
+      action: "filter_toggle"
+    S:
+      type: NETHER_STAR
+      name: "&dFavorites"
+      lore:
+        - "&fView bookmarked landmarks"
+      action: "open_gui:my_favorites"
+    C:
+      type: EMERALD
+      name: "&aCreate Landmark"
+      lore:
+        - "&aCreate a new landmark"
+        - "&fCost: %create_cost% coins"
+      action: "create_landmark_chat"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "
+

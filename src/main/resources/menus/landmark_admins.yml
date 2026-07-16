@@ -1,0 +1,39 @@
+# 地标管理员 — 管理地标的管理组成员
+landmark_admins:
+  title: "&a地标管理员"
+  shape:
+    - "#########"
+    - "#AAAAAAA#"
+    - "N###T#S#P"
+  items:
+    A:
+      type: PLAYER_HEAD
+      name: "&a%admin_name%"
+      lore:
+        - "&f(%admin_role%)"
+        - "&fShift+左键 删除"
+      action: ""
+      shift_left_action: "remove_manager:%admin_uuid%"
+    T:
+      type: EMERALD
+      name: "&a添加管理员"
+      lore:
+        - "&f点击添加新管理员"
+      action: "add_manager"
+    S:
+      type: BARRIER
+      name: "&c返回"
+      lore:
+        - "&f返回地标管理"
+      action: "return_landmark_manage"
+    N:
+      type: ARROW
+      name: "&a上一页 (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&a下一页 (%current_page%/%total_pages%)"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

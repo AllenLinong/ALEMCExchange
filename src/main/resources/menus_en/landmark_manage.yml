@@ -1,0 +1,110 @@
+# Landmark Management — edit single landmark properties
+landmark_manage:
+  title: "&aManage Landmark"
+  admin_title: "&aManage Other Landmark"
+  shape:
+    - "####Z####"
+    - "#A#S#W#O#"
+    - "#B#C#D#E#"
+    - "H###Q###X"
+  admin_shape:
+    - "####Z####"
+    - "#A##W##O#"
+    - "#B##C##D#"
+    - "####Q###X"
+  items:
+    Z:
+      type: ENDER_PEARL
+      name: "&aSet Teleport Point"
+      lore:
+        - "&fServer: %landmark_server%"
+        - "&fLocation: %landmark_location%"
+        - "&fWorld: %landmark_world%"
+        - "&aClick to use your current position"
+      action: "set_location"
+    A:
+      type: NAME_TAG
+      name: "&aSet Name"
+      lore:
+        - "&fCurrent name:"
+        - "%landmark_name%"
+        - "&aLeft: Change name"
+        - "&eRight: Set name color"
+      action: "set_name"
+      right_action: "open_landmark_color:name"
+    S:
+      type: PLAYER_HEAD
+      name: "&aManagers"
+      lore:
+        - "&aClick to manage managers"
+        - "&aAfter adding or removing managers"
+        - "&areturn to this screen and save"
+      action: "open_admin_interface"
+    W:
+      type: ITEM_FRAME
+      name: "&aSet Icon"
+      lore:
+        - "&aHold item & click to set"
+      action: "set_icon"
+    O:
+      type: OAK_DOOR
+      name: "&aVisibility"
+      lore:
+        - "&fCurrent: %landmark_private%"
+        - "&7Private landmarks are only visible to the owner, managers, and OPs"
+        - "&7Turning private clears all favorites for this landmark"
+        - "&aClick to toggle"
+      action: "toggle_private"
+    B:
+      type: PAPER
+      name: "&aSet Description"
+      lore:
+        - "&fCurrent description:"
+        - "%landmark_description%"
+        - "&aLeft: Change description"
+        - "&eRight: Set description color"
+      action: "set_description"
+      right_action: "open_landmark_color:description"
+    C:
+      type: BOOKSHELF
+      name: "&aSet Category"
+      lore:
+        - "&fCurrent: %landmark_category%"
+        - "&aClick to change"
+      action: "set_category"
+    D:
+      type: GOLD_INGOT
+      name: "&aSet Price"
+      lore:
+        - "&fCurrent: %landmark_price%"
+        - "&aClick to change"
+      action: "set_price"
+    E:
+      type: RED_WOOL
+      name: "&cDelete"
+      lore:
+        - "&cDelete this landmark"
+        - "&cCannot be undone!"
+      action: "delete_landmark"
+    H:
+      type: BLACK_BANNER
+      name: "&cBlacklist"
+      lore:
+        - "&fClick to manage this landmark's blacklist"
+        - "&7Blacklisted players cannot teleport, favorite, or review"
+      action: "open_blacklist_interface"
+    Q:
+      type: GREEN_WOOL
+      name: "&aSave"
+      lore:
+        - "&aSave all changes"
+      action: "save_landmark"
+    X:
+      type: BARRIER
+      name: "&cCancel"
+      lore:
+        - "&fReturn to my landmarks"
+      action: "open_gui:my_landmarks"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

@@ -1,0 +1,60 @@
+# 我的地标 — 管理玩家自己创建的地标
+my_landmarks:
+  title: "&a我的地标"
+  shape:
+    - "#########"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N#S#F#Q#P"
+  items:
+    A:
+      type: COMPASS
+      name: "&e%landmark_name%"
+      lore:
+        - "&6▶ &8描述"
+        - "&a%landmark_description%"
+        - ""
+        - "&6▶ &8地标信息"
+        - "&a▸&7创建玩家：%landmark_owner%"
+        - "&a▸&7地标类型：%landmark_category%"
+        - "&a▸&7访问流量：%landmark_visits% &7次"
+        - "&a▸&7传送价格：%landmark_price%"
+        - "&a▸&7公开状态：%landmark_private%"
+        - ""
+        - "&6▶ &8操作"
+        - "&7•&a鼠标左键&a➤&f传送"
+        - "&7•&e鼠标右键&a➤&f管理地标"
+      action: "teleport:%landmark_id%"
+      right_action: "open_gui:landmark_manage:%landmark_id%"
+    F:
+      type: BOOK
+      name: "&a返回主菜单"
+      action: "open_gui:main_menu"
+    S:
+      type: MAP
+      name: "&a我管理的地标"
+      lore:
+        - "&a点击查看你拥有管理权限的地标"
+      action: "open_gui:managed_landmarks"
+    Q:
+      type: GOLD_INGOT
+      name: "&6地标收入"
+      lore:
+        - "&f税前收入：&6%pending_income% 金币"
+        - "&f税率：&e%income_tax_rate%%"
+        - "&f税后收入：&6%claimable_income% 金币"
+        - "&a点击领取"
+      action: "claim_income"
+    N:
+      type: ARROW
+      name: "&a上一页 (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&a下一页 (%current_page%/%total_pages%)"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

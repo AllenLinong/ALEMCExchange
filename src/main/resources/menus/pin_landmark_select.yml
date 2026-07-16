@@ -1,0 +1,32 @@
+pin_landmark_select:
+  title: "&a选择要置顶的地标"
+  shape:
+    - "#########"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#AAAAAAA#"
+    - "#########"
+    - "N#######P"
+  items:
+    A:
+      type: COMPASS
+      name: "&e%landmark_name%"
+      lore:
+        - "&f描述"
+        - "&a%landmark_description%"
+        - ""
+        - "&f分类：%landmark_category%"
+        - "&f服务器：%landmark_server%"
+        - "&a点击选择这个地标"
+      action: "select_pin_landmark:%landmark_id%"
+    N:
+      type: ARROW
+      name: "&a上一页 (%current_page%/%total_pages%)"
+      action: "prev_page"
+    P:
+      type: ARROW
+      name: "&a下一页 (%current_page%/%total_pages%)"
+      action: "next_page"
+    "#":
+      type: BLACK_STAINED_GLASS_PANE
+      name: " "

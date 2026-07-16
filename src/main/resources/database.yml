@@ -1,0 +1,59 @@
+# ============================================================
+# ALwarp 数据库与跨服配置文件 (database.yml)
+# ============================================================
+# 此文件仅在以下场景需要修改：
+#   1. 使用 MySQL 替代默认的 SQLite 数据库
+#   2. 多服务器跨服同步（需要 MySQL + Redis）
+# 单服务器使用 SQLite 时无需修改此文件
+# ============================================================
+
+# ── 数据库设置 ────────────────────────────────────────────
+database:
+  # 数据库类型：sqlite（本地单文件）或 mysql（远程服务器/跨服共享）
+  # 跨服模式必须使用 mysql，所有服务器连接同一个数据库
+  type: "sqlite"
+
+  # ── MySQL 连接信息（type=mysql 时填写）──────────────────
+  # 数据库服务器地址
+  host: "localhost"
+  # 数据库端口
+  port: 3306
+  # 数据库名称（需提前创建）
+  database: "alwarp"
+  # 数据库用户名
+  username: "alwarp"
+  # 数据库密码
+  password: "password"
+  # 数据库表名前缀，方便在数据库中快速找到本插件的数据表
+  # 例如默认值会创建 alwarp_landmarks、alwarp_categories 等表
+  prefix: "alwarp_"
+  # 旧版兼容项：如果你已经使用 table_prefix，可以继续保留原值
+  table_prefix: "alwarp_"
+
+  # ── 连接池配置（仅 MySQL 生效）─────────────────────────
+  pool:
+    # 连接池最大连接数
+    maximum_pool_size: 20
+    # 连接池最小空闲连接数
+    minimum_idle: 5
+    # 获取连接超时时间（毫秒）
+    connection_timeout: 30000
+    # 空闲连接回收时间（毫秒）
+    idle_timeout: 600000
+    # 连接最大存活时间（毫秒）
+    max_lifetime: 1800000
+
+# ── Redis 设置（跨服通信）────────────────────────────────
+redis:
+  # 是否启用 Redis 跨服通信
+  # 启用后服务器之间可实时同步地标数据并支持跨服传送
+  enabled: false
+
+  # Redis 服务器地址
+  host: "localhost"
+  # Redis 端口
+  port: 6379
+  # Redis 密码（无密码留空）
+  password: ""
+  # 消息频道名（所有互联的服务器必须使用相同的频道名）
+  channel: "alwarp_channel"
