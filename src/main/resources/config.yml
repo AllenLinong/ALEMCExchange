@@ -1,0 +1,90 @@
+# 调试功能
+debug:
+  enabled: false  # 是否开启调试模式
+  level: info  # 调试级别：info, debug, trace
+
+# 数据库配置
+database:
+  type: sqlite  # 数据库类型：sqlite 或 mysql
+  mysql:  # MySQL 数据库配置（当 type 为 mysql 时使用）
+    host: localhost  # MySQL 主机地址
+    port: 3306  # MySQL 端口
+    database: minecraft  # MySQL 数据库名称
+    user: root  # MySQL 用户名
+    password: ''  # MySQL 密码
+    connection-parameters: "?autoReconnect=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8"  # 连接参数
+    pool-settings:  # 连接池设置
+      max-pool-size: 10  # 最大连接数
+      min-idle: 5  # 最小空闲连接数
+      max-lifetime: 1800000  # 连接最大生命周期（毫秒）
+      keep-alive-time: 60000  # 连接保持时间（毫秒）
+      time-out: 30000  # 连接超时时间（毫秒）
+  table_prefix: 'alembc_'  # 表名前缀，用于避免表名冲突
+  sqlite:  # SQLite 数据库配置（当 type 为 sqlite 时使用）
+    file: 'alembc.db'  # SQLite 数据库文件名称
+
+# 默认税率配置
+sell_tax: 0.05  # 默认税率 5%
+
+# 不同权限的税率配置
+tax_rates:
+  alemcexchange.vip: 0.03  # VIP 3% 税率
+  alemcexchange.premium: 0.01  # 高级用户 1% 税率
+  alemcexchange.notax: 0.0  # 无税率
+
+# 功能开关
+features:
+  auto_sell: true  # 是否开启自动出售功能
+
+# 自动出售相关设置
+autosell:
+  send_message: true  # 自动出售时是否发送提示消息
+  batch_threshold: 64  # 批量出售阈值，达到此数量才自动出售
+
+# 每日 EMC 获取限制
+# 此功能限制玩家每天通过出售物品获得的 EMC 总量。
+# 修改配置后使用 /alemcexchange reload 重载插件。
+daily_limit:
+  enabled: false  # true=启用每日限额，false=关闭每日限额
+  reset_time: "00:00"  # 每日额度重置时间，使用服务器本地时间，格式必须为 HH:mm
+  default_limit: 10000  # 兼容旧版配置；新配置实际默认额度由 limit_groups.base.limit 决定
+
+  # 权限前缀：实际权限节点格式为「permission_prefix.权限组名称」
+  # 例如 vip 组对应 alemcexchange.daily.vip
+  permission_prefix: "alemcexchange.daily"
+
+  # 每日限额权限组，可按相同格式自由新增更多组，无需修改插件代码。
+  # base：所有玩家自动使用的默认组，不需要授予 alemcexchange.daily.base 权限。
+  # limit：该组每日最多可获得的 EMC；设置为 -1 表示无限制。
+  # weight：权限优先级，数值越大越优先。
+  # 当玩家同时拥有多个组权限时，只使用 weight 最高的组，不叠加额度。
+  limit_groups:
+    base:
+      limit: 10000  # 普通玩家每日上限
+      weight: 0     # 默认组应保持最低权重
+    vip:
+      limit: 50000  # 需要权限 alemcexchange.daily.vip
+      weight: 10
+    premium:
+      limit: 100000 # 需要权限 alemcexchange.daily.premium
+      weight: 20
+    unlimited:
+      limit: -1     # 需要权限 alemcexchange.daily.unlimited；-1 表示无限制
+      weight: 100
+
+    # 新增权限组示例（删除前面的 # 即可启用）：
+    # svip:
+    #   limit: 200000  # 对应权限 alemcexchange.daily.svip
+    #   weight: 30
+
+# 权限说明
+# alemcexchange.use - 基础使用权限（默认所有玩家拥有）
+# alemcexchange.admin - 管理员权限，用于执行reload、give命令和解锁其他玩家的所有物品
+# alemcexchange.autosell - 允许使用自动出售功能
+# alemcexchange.notax - 无税率权限
+# alemcexchange.vip - VIP权限，3%税率
+# alemcexchange.premium - 高级用户权限，1%税率
+# alemcexchange.unlockall.auto - 自动解锁所有物品（无需执行命令）
+# alemcexchange.daily.vip - VIP每日限额权限
+# alemcexchange.daily.premium - 高级用户每日限额权限
+# alemcexchange.daily.unlimited - 无限每日限额权限
