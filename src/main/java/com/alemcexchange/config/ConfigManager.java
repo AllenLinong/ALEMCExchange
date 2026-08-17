@@ -8,7 +8,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -107,6 +107,10 @@ public class ConfigManager {
             config.set("autosell.batch_threshold", 64);
             configChanged = true;
         }
+        if (!config.contains("features.drop_overflow_items")) {
+            config.set("features.drop_overflow_items", true);
+            configChanged = true;
+        }
 
         // === 补全 lang.yml 缺失项 ===
         // PlaceholderAPI
@@ -203,7 +207,7 @@ public class ConfigManager {
     }
 
     private void rebuildItemCache() {
-        Map<String, ItemConfig> newCache = new HashMap<>();
+        Map<String, ItemConfig> newCache = new LinkedHashMap<>();
         ConfigurationSection itemSection = items.getConfigurationSection("items");
         if (itemSection != null) {
             for (String materialName : itemSection.getKeys(false)) {
@@ -282,6 +286,10 @@ public class ConfigManager {
 
     public boolean isAutoSellEnabled() {
         return config.getBoolean("features.auto_sell", true);
+    }
+
+    public boolean isDropOverflowItemsEnabled() {
+        return config.getBoolean("features.drop_overflow_items", true);
     }
 
     public boolean isDebugEnabled() {

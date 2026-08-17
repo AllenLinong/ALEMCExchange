@@ -910,6 +910,7 @@ public class MenuManager implements Listener {
             }
             int amount = isRightClick ? 64 : 1;
             double totalEMC = emcPerItem * amount;
+            ItemStack itemToAdd = new ItemStack(material, amount);
 
             int maxStackSize = material.getMaxStackSize();
             int emptySlots = 0;
@@ -920,7 +921,7 @@ public class MenuManager implements Listener {
                 ItemStack invItem = contents[i];
                 if (invItem == null) {
                     emptySlots++;
-                } else if (invItem.getType() == material) {
+                } else if (invItem.isSimilar(itemToAdd)) {
                     int currentAmount = invItem.getAmount();
                     if (currentAmount < maxStackSize) {
                         existingPartialSlotSpace += (maxStackSize - currentAmount);
@@ -934,7 +935,7 @@ public class MenuManager implements Listener {
                 plugin.getLogger().info("[DEBUG] purchase - player: " + player.getName() + ", material: " + materialName + ", req: " + amount + ", canAdd: " + canAdd + ", empty: " + emptySlots + ", partial: " + existingPartialSlotSpace);
             }
 
-            if (canAdd < amount) {
+            if (!configManager.isDropOverflowItemsEnabled() && canAdd < amount) {
                 player.sendMessage(ColorUtil.translateColorCodes( configManager.getLang().getString("prefix") + configManager.getLang().getString("menu.exchange.inventory-full")));
                 return;
             }
@@ -945,8 +946,12 @@ public class MenuManager implements Listener {
             }
             clearPlayerCache(player.getUniqueId());
 
-            ItemStack itemToAdd = new ItemStack(material, amount);
-            player.getInventory().addItem(itemToAdd);
+            Map<Integer, ItemStack> leftover = player.getInventory().addItem(itemToAdd);
+            if (configManager.isDropOverflowItemsEnabled()) {
+                for (ItemStack leftoverItem : leftover.values()) {
+                    player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
+                }
+            }
 
             String message = configManager.getLang().getString("prefix") +
                     configManager.getLang().getString("menu.exchange.purchase-success").replace("{amount}", String.format("%.2f", totalEMC));

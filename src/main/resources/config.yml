@@ -34,6 +34,7 @@ tax_rates:
 
 # 功能开关
 features:
+  drop_overflow_items: true  # Drop exchanged items at the player's feet when the inventory cannot hold them; false rejects the exchange
   auto_sell: true  # 是否开启自动出售功能
 
 # 自动出售相关设置
