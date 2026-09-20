@@ -36,10 +36,12 @@ public class ConfigManager {
     public void loadConfig() {
         plugin.getDataFolder().mkdirs();
         config = loadConfigFile("config.yml");
-        lang = loadConfigFile("lang.yml");
         items = loadConfigFile("items.yml");
-        menus = loadConfigFile("menus.yml");
         database = loadDatabaseConfig();
+        // lang.yml / menus.yml 是 <2.0.0 的遗留文件，2.0.0 起 jar 不再内嵌；
+        // 仅当数据目录存在旧文件时读取（供下方迁移逻辑使用），全新安装留空
+        lang = loadLegacyFile("lang.yml");
+        menus = loadLegacyFile("menus.yml");
         migrateAndLoadLangs();
         migrateMenusV2ToV3();
         migrateMenusToV4();
@@ -129,26 +131,24 @@ public class ConfigManager {
     private YamlConfiguration loadConfigFile(String filename) {
         File file = new File(plugin.getDataFolder(), filename);
         if (!file.exists()) {
-            plugin.saveResource(filename, false);
-            return YamlConfiguration.loadConfiguration(file);
-        }
-        // menus.yml v1 → v2 自动升级：旧格式备份后释放新版
-        if (filename.equals("menus.yml")) {
-            YamlConfiguration existing = YamlConfiguration.loadConfiguration(file);
-            if (existing.getInt("config-version", 1) < 2) {
-                File backup = new File(plugin.getDataFolder(), "menus_old_v1.yml");
-                if (!backup.exists()) {
-                    try {
-                        java.nio.file.Files.copy(file.toPath(), backup.toPath());
-                        plugin.getLogger().info("Detected legacy menus.yml, backed up to menus_old_v1.yml");
-                    } catch (IOException e) {
-                        plugin.getLogger().warning("Could not back up menus.yml: " + e.getMessage());
-                    }
-                }
-                plugin.saveResource("menus.yml", true);
-                existing = YamlConfiguration.loadConfiguration(file);
-                return existing;
+            // 防御：资源未打进 jar 时 saveResource 会抛 IllegalArgumentException 并中断启用
+            if (plugin.getResource(filename) == null) {
+                plugin.getLogger().severe("Bundled resource '" + filename + "' not found in jar, cannot create " + filename);
+                return new YamlConfiguration();
             }
+            plugin.saveResource(filename, false);
+        }
+        return YamlConfiguration.loadConfiguration(file);
+    }
+
+    /**
+     * 加载旧版（<2.0.0）根目录遗留文件（lang.yml / menus.yml）。
+     * 2.0.0 起 jar 不再内嵌这两个文件，因此文件不存在时返回空配置而不是释放默认文件。
+     */
+    private YamlConfiguration loadLegacyFile(String filename) {
+        File file = new File(plugin.getDataFolder(), filename);
+        if (!file.exists()) {
+            return new YamlConfiguration();
         }
         return YamlConfiguration.loadConfiguration(file);
     }
@@ -383,10 +383,15 @@ public class ConfigManager {
     }
 
     /**
-     * 旧 v2 menus.yml（含内联文本）迁移到 v3（纯布局）：
-     * 把用户自定义的按钮文本抽取到 lang/zh_CN.yml 的 gui 段后替换为 v3 布局。
+     * 旧 v2 menus.yml（含内联文本）的文本抽取：
+     * 把用户自定义的按钮文本写入 lang/zh_CN.yml 的 gui 段，布局留在内存中供 v4 迁移读取。
+     * （2.0.0 起 jar 不再内嵌 menus.yml，无法再释放 v3 版文件，也不再需要。）
      */
     private void migrateMenusV2ToV3() {
+        // v4 菜单目录已生成时无需再做旧迁移，否则每次 reload 都会把 gui 段写回语言文件
+        if (new File(plugin.getDataFolder(), "menus").isDirectory()) {
+            return;
+        }
         File menusFile = new File(plugin.getDataFolder(), "menus.yml");
         if (!menusFile.exists()) {
             return;
@@ -443,9 +448,9 @@ public class ConfigManager {
                 plugin.getLogger().warning("Could not back up menus.yml: " + e.getMessage());
             }
         }
-        plugin.saveResource("menus.yml", true);
-        menus = YamlConfiguration.loadConfiguration(menusFile);
-        plugin.getLogger().info("Migrated menus.yml to v3 (layout-only); texts moved to lang/zh_CN.yml");
+        // 不再从 jar 释放 v3 menus.yml：内存中的 v2 布局可直接被 v4 迁移读取
+        // （v2 items 里的 name/lore 会被 v4 迁移忽略，文本已在上面写入语言 gui 段）
+        plugin.getLogger().info("Migrated menus.yml button texts to lang/zh_CN.yml (layout kept for v4 migration)");
     }
 
     /**
@@ -539,26 +544,10 @@ public class ConfigManager {
                     }
                 }
                 plugin.getLogger().info("Migrated menus.yml + lang gui texts to menus/<lang>/ per-menu files");
-            } else {
-                // 全新安装：释放内置菜单（与内置语言对应）
-                for (String tag : new String[]{"zh_CN", "en_US"}) {
-                    File langDir = new File(menusDir, tag);
-                    langDir.mkdirs();
-                    for (String menuName : new String[]{"main", "sell", "browse", "exchange"}) {
-                        String res = "menus/" + tag + "/" + menuName + ".yml";
-                        File target = new File(langDir, menuName + ".yml");
-                        if (!target.exists()) {
-                            try (java.io.InputStream in = plugin.getResource(res)) {
-                                if (in != null) {
-                                    java.nio.file.Files.copy(in, target.toPath());
-                                }
-                            } catch (IOException e) {
-                                plugin.getLogger().warning("Failed to extract " + res + ": " + e.getMessage());
-                            }
-                        }
-                    }
-                }
             }
+            // 全新安装时释放全部内置菜单；旧版迁移时兜底补齐缺失的标准菜单
+            // （旧 menus.yml 格式读不出布局的情况下，保证标准菜单可用）
+            extractMissingBundledMenus(menusDir);
         }
 
         // 按 config.language 加载对应语言目录（无则取第一个可用目录）
@@ -582,6 +571,31 @@ public class ConfigManager {
         }
         if (menuConfigs.isEmpty()) {
             plugin.getLogger().severe("No menu files loaded from menus/ directory!");
+        }
+    }
+
+    /**
+     * 从 jar 释放内置标准菜单到 menus/<tag>/，只补齐磁盘上缺失的文件，不覆盖已有文件
+     * （包括用户迁移生成或自定义过的菜单）。
+     */
+    private void extractMissingBundledMenus(File menusDir) {
+        for (String tag : new String[]{"zh_CN", "en_US"}) {
+            File langDir = new File(menusDir, tag);
+            langDir.mkdirs();
+            for (String menuName : new String[]{"main", "sell", "browse", "exchange"}) {
+                String res = "menus/" + tag + "/" + menuName + ".yml";
+                File target = new File(langDir, menuName + ".yml");
+                if (target.exists()) {
+                    continue;
+                }
+                try (java.io.InputStream in = plugin.getResource(res)) {
+                    if (in != null) {
+                        java.nio.file.Files.copy(in, target.toPath());
+                    }
+                } catch (IOException e) {
+                    plugin.getLogger().warning("Failed to extract " + res + ": " + e.getMessage());
+                }
+            }
         }
     }
 
