@@ -15,8 +15,6 @@ items:
     name: '&a%item_name%'
     lore:
     - '&6▶ &8物品信息'
-    - '&a▸&7物品名称：%item_name%'
-    - '&a▸&7物品ID：%item_id%'
     - '&a▸&7EMC价值：%emc%'
     - ''
     - '&6▶ &8操作'

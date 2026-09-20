@@ -15,8 +15,6 @@ items:
     name: '&a%item_name%'
     lore:
     - '&6▶ &8Item Info'
-    - '&a▸&7Name: %item_name%'
-    - '&a▸&7ID: %item_id%'
     - '&a▸&7EMC value: %emc%'
     - ''
     - '&6▶ &8Actions'
