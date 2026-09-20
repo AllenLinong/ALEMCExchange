@@ -1,0 +1,41 @@
+title: '&8&lEMC 出售'
+shape:
+- '####I####'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- 'K###S####'
+items:
+  '#':
+    type: BLACK_STAINED_GLASS_PANE
+    name: ' '
+  I:
+    type: NETHER_STAR
+    name: '&e&l出售信息'
+    lore:
+    - '&6▶ &8说明'
+    - '&a▸&7将物品放入下方空格'
+    - '&a▸&7点击出售按钮兑换 EMC'
+    - ''
+    - '&6▶ &8交易信息'
+    - '&a▸&7出售税率：%tax%%'
+  S:
+    type: SUNFLOWER
+    name: '&a&l确认出售'
+    lore:
+    - '&6▶ &8操作'
+    - '&7•&a鼠标左键&a➤&f出售界面内所有物品'
+    triggers:
+      left:
+      - 'sound: BLOCK_NOTE_BLOCK_PLING-1-1.5'
+      - 'sell'
+  K:
+    type: ARROW
+    name: '&c&l返回'
+    lore:
+    - '&7•&c鼠标左键&a➤&f返回主菜单'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'back'

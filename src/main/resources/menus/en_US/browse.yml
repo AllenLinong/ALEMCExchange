@@ -1,0 +1,83 @@
+title: '&8&lItem Browser %page_display%'
+shape:
+- '####T####'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- 'N#Q#K###P'
+items:
+  '#':
+    type: BLACK_STAINED_GLASS_PANE
+    name: ' '
+  A:
+    name: '&e%item_name%'
+    lore:
+    - '&6▶ &8Item Info'
+    - '&a▸&7Name: %item_name%'
+    - '&a▸&7ID: %item_id%'
+    - '&a▸&7EMC value: %emc%'
+    - ''
+    - '&6▶ &8Unlock Progress'
+    - '&a▸&7Mined: %mine_progress%'
+    - '&a▸&7Sold: %sell_progress%'
+    - '&a▸&7Status: %unlock_status%'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fBuy 1'
+    - '&7•&eRight-click&a➤&fBuy 64'
+    - '&7•&cLocked items cannot be bought'
+    triggers:
+      left:
+      - 'sound: ENTITY_EXPERIENCE_ORB_PICKUP-1-1'
+      - 'exchange_buy_1'
+      right:
+      - 'sound: ENTITY_EXPERIENCE_ORB_PICKUP-1-1'
+      - 'exchange_buy_64'
+  K:
+    type: ARROW
+    name: '&c&lBack'
+    lore:
+    - '&7•&cLeft-click&a➤&fBack to main menu'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'back'
+  N:
+    type: SPECTRAL_ARROW
+    name: '&aPrevious Page (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&aLeft-click&a➤&fGo to previous page'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'prev_page'
+  Q:
+    type: COMPASS
+    name: '&aSearch'
+    lore:
+    - '&fCurrent search: %current_search%'
+    - '&aLeft-click to search'
+    - '&eRight-click to clear'
+    triggers:
+      left:
+      - 'sound: BLOCK_NOTE_BLOCK_PLING-1-2'
+      - 'search'
+      right:
+      - 'sound: BLOCK_NOTE_BLOCK_PLING-1-2'
+      - 'clear_search'
+  T:
+    type: PAPER
+    name: '&ePage %current_page% of %total_pages%'
+    lore:
+    - '&6▶ &8Stats'
+    - '&a▸&7Total items: %total_items%'
+  P:
+    type: SPECTRAL_ARROW
+    name: '&aNext Page (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&aLeft-click&a➤&fGo to next page'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'next_page'

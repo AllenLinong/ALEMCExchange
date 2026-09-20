@@ -1,0 +1,88 @@
+# ═══════════════════════════════════════════════
+#  ALEMCExchange English (en_US)
+#  Menu texts follow the player's client language.
+# ═══════════════════════════════════════════════
+prefix: '&6[EMC] &r'
+command:
+  player-only: '&cOnly players can use this command!'
+  no-permission: '&cYou don''t have permission to use this command!'
+  unknown: '&cUnknown command. Use /alex for help!'
+  invalid-amount: '&cInvalid amount!'
+  player-not-found: '&cPlayer not found!'
+  insufficient-funds: '&cInsufficient balance!'
+  balance: '&aYour EMC balance: &6{balance}&a!'
+  balance-failed: '&cFailed to get balance!'
+  autosell: '&aAuto-sell {status}!'
+  reload: '&aConfiguration reloaded!'
+  operation-failed: '&cOperation failed!'
+  give:
+    usage: '&cUsage: /alex give <player> <amount>'
+    success: '&aGave &6{player} &6{amount} &aEMC!'
+  transfer:
+    usage: '&cUsage: /alex transfer <player> <amount>'
+    success: '&aTransferred &6{amount} EMC &ato &6{player} &a(net: &6{netAmount}&a, tax: &6{tax}&a)'
+    received: '&aYou received &6{amount} EMC &afrom &6{player}&a!'
+    self: '&cYou cannot transfer to yourself!'
+  unlockall:
+    usage: '&cUsage: /alex unlockall <player>'
+    success: '&aUnlocked all items for &6{player}&a!'
+  unlock:
+    usage: '&cUsage: /alex unlock <player> <item-id>'
+    success: '&aUnlocked item &6{item} &afor &6{player}&a!'
+    invalid-item: '&cInvalid item ID!'
+  set:
+    usage: '&cUsage: /alex set <player> <amount>'
+    success: '&aSet &6{player}&a''s EMC to: &6{amount}'
+help:
+  title: '&6=== ALEMCExchange Help ==='
+  main: '&a/alex &7- Open main menu'
+  help: '&a/alex help &7- Show this help'
+  sell: '&a/alex sell &7- Open sell menu'
+  exchange: '&a/alex exchange &7- Open exchange menu'
+  browse: '&a/alex browse &7- Open browse menu'
+  balance: '&a/alex balance &7- Check EMC balance'
+  autosell: '&a/alex autosell &7- Toggle auto-sell'
+  pay: '&a/alex pay <player> <amount> &7- Transfer EMC to a player'
+  reload: '&a/alex reload &7- Reload configuration'
+  give: '&a/alex give <player> <amount> &7- Give EMC to a player'
+  set: '&a/alex set <player> <amount> &7- Set a player''s EMC'
+  unlockall: '&a/alex unlockall <player> &7- Unlock all items for a player'
+  footer: '&6===================='
+menu:
+  sell:
+    success: '&aSold! Received &6{amount} EMC'
+    failed: '&cSell failed!'
+  exchange:
+    inventory-full: '&cInventory is full!'
+    purchase-success: '&aPurchased! Spent &6{amount} EMC'
+    item-locked: '&cThis item is locked, cannot purchase!'
+    partial-success: '&eNot enough space, bought &6{count} &e(cost &6{amount} EMC&e)'
+    dropped: '&eInventory full, &6{amount} &eitems dropped at your feet'
+    refunded: '&cSpace error, &6{amount} &citems undelivered, refunded &6{emc} EMC'
+autosell:
+  enabled: '&aAuto-sell enabled!'
+  disabled: '&cAuto-sell disabled!'
+  sold: '&aAuto-sold: &6{amount} EMC'
+mine:
+  unlocked: '&aCongratulations, unlocked &6{item} &a!'
+placeholder:
+  autosell:
+    enabled: 'ON'
+    disabled: 'OFF'
+  daily_limit:
+    unlimited: Unlimited
+daily_limit:
+  reached: '&cYour daily EMC limit is used up! Come back tomorrow.'
+  remaining: '&eDaily remaining: &6{remaining} &e/ &6{limit} EMC'
+  unlimited: '&aUnlimited'
+search:
+  prompt: '&eType a search keyword in chat (Chinese name / item ID / CE item ID). Type cancel to abort:'
+  applied: '&aSearch applied: &f{keyword}'
+  cleared: '&aSearch cleared, showing all items.'
+  cancelled: '&cSearch cancelled.'
+  no-result: '&cNo items matched &f{keyword}&c.'
+gui-misc:
+  unlocked: '&aUnlocked'
+  locked: '&cLocked'
+  none: —
+  no-search: None

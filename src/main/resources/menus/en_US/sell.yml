@@ -1,0 +1,41 @@
+title: '&8&lEMC Selling'
+shape:
+- '####I####'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- 'K###S####'
+items:
+  '#':
+    type: BLACK_STAINED_GLASS_PANE
+    name: ' '
+  I:
+    type: NETHER_STAR
+    name: '&e&lSell Info'
+    lore:
+    - '&6▶ &8Info'
+    - '&a▸&7Place items in the slots below'
+    - '&a▸&7Click the sell button to convert'
+    - ''
+    - '&6▶ &8Trading'
+    - '&a▸&7Tax rate: %tax%%'
+  S:
+    type: SUNFLOWER
+    name: '&a&lConfirm Sell'
+    lore:
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fSell all items in the menu'
+    triggers:
+      left:
+      - 'sound: BLOCK_NOTE_BLOCK_PLING-1-1.5'
+      - 'sell'
+  K:
+    type: ARROW
+    name: '&c&lBack'
+    lore:
+    - '&7•&cLeft-click&a➤&fBack to main menu'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'back'

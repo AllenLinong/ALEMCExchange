@@ -1,54 +1,58 @@
+# 数据库与跨服同步配置见 database.yml
+# ── 语言设置 ──
+# language: 服务器语言，决定加载 menus/<语言>/ 菜单目录与 lang/<语言>.yml 消息文件
+# 切换语言：改成 en_US 后执行 /alex reload（菜单文件按语言目录整体加载）
+language: zh_CN
+
+# 菜单按钮全局冷却（秒）：同一玩家任意按钮 CD 内只响应一次，防连点器
+# 人类点击峰值约 5-8 次/秒，0.25 秒对真人无感、连点器全挡
+# 想更严格可调 0.25 或 0.5；0 = 关闭
+gui:
+  button-click-cooldown-seconds: 0.15
+
 # 调试功能
 debug:
-  enabled: false  # 是否开启调试模式
-  level: info  # 调试级别：info, debug, trace
+  # 是否开启调试模式
+  enabled: false
+  # 调试级别：info, debug, trace
+  level: info
 
-# 数据库配置
-database:
-  type: sqlite  # 数据库类型：sqlite 或 mysql
-  mysql:  # MySQL 数据库配置（当 type 为 mysql 时使用）
-    host: localhost  # MySQL 主机地址
-    port: 3306  # MySQL 端口
-    database: minecraft  # MySQL 数据库名称
-    user: root  # MySQL 用户名
-    password: ''  # MySQL 密码
-    connection-parameters: "?autoReconnect=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8"  # 连接参数
-    pool-settings:  # 连接池设置
-      max-pool-size: 10  # 最大连接数
-      min-idle: 5  # 最小空闲连接数
-      max-lifetime: 1800000  # 连接最大生命周期（毫秒）
-      keep-alive-time: 60000  # 连接保持时间（毫秒）
-      time-out: 30000  # 连接超时时间（毫秒）
-  table_prefix: 'alembc_'  # 表名前缀，用于避免表名冲突
-  sqlite:  # SQLite 数据库配置（当 type 为 sqlite 时使用）
-    file: 'alembc.db'  # SQLite 数据库文件名称
-
-# 默认税率配置
-sell_tax: 0.05  # 默认税率 5%
+# 默认税率 5%
+sell_tax: 0.05
 
 # 不同权限的税率配置
 tax_rates:
-  alemcexchange.vip: 0.03  # VIP 3% 税率
-  alemcexchange.premium: 0.01  # 高级用户 1% 税率
-  alemcexchange.notax: 0.0  # 无税率
+  # VIP 3% 税率
+  alemcexchange.vip: 0.03
+  # 高级用户 1% 税率
+  alemcexchange.premium: 0.01
+  # 无税率
+  alemcexchange.notax: 0.0
 
 # 功能开关
 features:
-  drop_overflow_items: true  # Drop exchanged items at the player's feet when the inventory cannot hold them; false rejects the exchange
-  auto_sell: true  # 是否开启自动出售功能
+  # 背包放不下时：true = 兑换物品掉落在脚边；false = 拒绝兑换
+  drop_overflow_items: true
+  # 是否开启自动出售功能
+  auto_sell: true
 
 # 自动出售相关设置
 autosell:
-  send_message: true  # 自动出售时是否发送提示消息
-  batch_threshold: 64  # 批量出售阈值，达到此数量才自动出售
+  # 自动出售时是否发送提示消息
+  send_message: true
+  # 批量出售阈值，达到此数量才自动出售
+  batch_threshold: 64
 
 # 每日 EMC 获取限制
 # 此功能限制玩家每天通过出售物品获得的 EMC 总量。
 # 修改配置后使用 /alemcexchange reload 重载插件。
 daily_limit:
-  enabled: false  # true=启用每日限额，false=关闭每日限额
-  reset_time: "00:00"  # 每日额度重置时间，使用服务器本地时间，格式必须为 HH:mm
-  default_limit: 10000  # 兼容旧版配置；新配置实际默认额度由 limit_groups.base.limit 决定
+  # true=启用每日限额，false=关闭每日限额
+  enabled: false
+  # 每日额度重置时间，使用服务器本地时间，格式必须为 HH:mm
+  reset_time: "00:00"
+  # 所有权限组都未匹配时的兜底额度；base 组也会用到
+  default_limit: 10000
 
   # 权限前缀：实际权限节点格式为「permission_prefix.权限组名称」
   # 例如 vip 组对应 alemcexchange.daily.vip
@@ -61,16 +65,21 @@ daily_limit:
   # 当玩家同时拥有多个组权限时，只使用 weight 最高的组，不叠加额度。
   limit_groups:
     base:
-      limit: 10000  # 普通玩家每日上限
-      weight: 0     # 默认组应保持最低权重
+      # 普通玩家每日上限
+      limit: 10000
+      # 默认组应保持最低权重
+      weight: 0
     vip:
-      limit: 50000  # 需要权限 alemcexchange.daily.vip
+      # 需要权限 alemcexchange.daily.vip
+      limit: 50000
       weight: 10
     premium:
-      limit: 100000 # 需要权限 alemcexchange.daily.premium
+      # 需要权限 alemcexchange.daily.premium
+      limit: 100000
       weight: 20
     unlimited:
-      limit: -1     # 需要权限 alemcexchange.daily.unlimited；-1 表示无限制
+      # 需要权限 alemcexchange.daily.unlimited；-1 表示无限制
+      limit: -1
       weight: 100
 
     # 新增权限组示例（删除前面的 # 即可启用）：

@@ -24,6 +24,103 @@ public class DatabaseManager {
         this.configManager = configManager;
     }
 
+    // ════════════════ 跨服同步钩子 ════════════════
+
+    /** 由 SyncManager 注入；为空（未启用同步/SQLite）时发布为空操作 */
+    public interface SyncPublisher {
+        void publish(UUID uuid);
+    }
+
+    private volatile SyncPublisher syncPublisher;
+
+    public void setSyncPublisher(SyncPublisher publisher) {
+        this.syncPublisher = publisher;
+    }
+
+    private void publishSync(UUID uuid) {
+        SyncPublisher publisher = syncPublisher;
+        if (publisher != null && uuid != null) {
+            try {
+                publisher.publish(uuid);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    public boolean isMySQLBackend() {
+        return isMySQL;
+    }
+
+    /** 创建跨服同步事件表（仅 MySQL） */
+    public void createSyncTableIfAbsent() throws SQLException, ClassNotFoundException {
+        if (!isMySQL) return;
+        String ddl = "CREATE TABLE IF NOT EXISTS " + tablePrefix + "sync_events " +
+                "(id BIGINT AUTO_INCREMENT PRIMARY KEY, server_id VARCHAR(64) NOT NULL, " +
+                "uuid VARCHAR(36) NOT NULL, created_at BIGINT NOT NULL, INDEX idx_created (created_at))";
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(ddl);
+        }
+    }
+
+    /** 当前最大事件 ID（启动时定位游标，避免回放历史） */
+    public long maxSyncEventId() throws SQLException, ClassNotFoundException {
+        if (!isMySQL) return 0;
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT MAX(id) FROM " + tablePrefix + "sync_events")) {
+            return rs.next() ? rs.getLong(1) : 0;
+        } catch (SQLException e) {
+            return 0;
+        }
+    }
+
+    /** 批量写入同步事件 */
+    public void insertSyncEvents(String serverId, Collection<UUID> uuids) throws SQLException, ClassNotFoundException {
+        if (!isMySQL || uuids.isEmpty()) return;
+        String sql = "INSERT INTO " + tablePrefix + "sync_events (server_id, uuid, created_at) VALUES (?, ?, ?)";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            long now = System.currentTimeMillis();
+            for (UUID uuid : uuids) {
+                stmt.setString(1, serverId);
+                stmt.setString(2, uuid.toString());
+                stmt.setLong(3, now);
+                stmt.addBatch();
+            }
+            stmt.executeBatch();
+        }
+    }
+
+    /** 拉取新事件：返回 [id, serverId, uuidString]，仅含 id > afterId 的记录 */
+    public List<String[]> pollSyncEvents(long afterId, int limit) throws SQLException, ClassNotFoundException {
+        List<String[]> events = new ArrayList<>();
+        if (!isMySQL) return events;
+        String sql = "SELECT id, server_id, uuid FROM " + tablePrefix + "sync_events WHERE id > ? ORDER BY id ASC LIMIT ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, afterId);
+            stmt.setInt(2, limit);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    events.add(new String[]{String.valueOf(rs.getLong(1)), rs.getString(2), rs.getString(3)});
+                }
+            }
+        }
+        return events;
+    }
+
+    /** 清理过期事件（任意服务器均可执行，幂等） */
+    public void pruneSyncEvents(long olderThanMillis) throws SQLException, ClassNotFoundException {
+        if (!isMySQL) return;
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                    "DELETE FROM " + tablePrefix + "sync_events WHERE created_at < ?")) {
+            stmt.setLong(1, olderThanMillis);
+            stmt.executeUpdate();
+        }
+    }
+
     public void initialize() {
         try {
             connect();
@@ -34,17 +131,18 @@ public class DatabaseManager {
     }
 
     private void connect() throws SQLException, ClassNotFoundException {
-        String databaseType = configManager.getConfig().getString("database.type", "sqlite");
+        org.bukkit.configuration.file.YamlConfiguration db = configManager.getDatabase();
+        String databaseType = db.getString("storage.type", "sqlite");
         // 读取表名前缀配置
-        tablePrefix = configManager.getConfig().getString("database.table_prefix", "");
+        tablePrefix = db.getString("storage.table-prefix", "");
 
         if (databaseType.equalsIgnoreCase("mysql")) {
             isMySQL = true;
-            String host = configManager.getConfig().getString("database.mysql.host", "localhost");
-            int port = configManager.getConfig().getInt("database.mysql.port", 3306);
-            String database = configManager.getConfig().getString("database.mysql.database", "minecraft");
-            String user = configManager.getConfig().getString("database.mysql.user", "root");
-            String password = configManager.getConfig().getString("database.mysql.password", "");
+            String host = db.getString("storage.mysql.host", "localhost");
+            int port = db.getInt("storage.mysql.port", 3306);
+            String database = db.getString("storage.mysql.database", "minecraft");
+            String user = db.getString("storage.mysql.user", "root");
+            String password = db.getString("storage.mysql.password", "");
 
             // 配置 HikariCP 连接池
             HikariConfig hikariConfig = new HikariConfig();
@@ -54,18 +152,18 @@ public class DatabaseManager {
             hikariConfig.addDataSourceProperty("databaseName", database);
             hikariConfig.addDataSourceProperty("user", user);
             hikariConfig.addDataSourceProperty("password", password);
-            
+
             // 从配置文件读取连接参数
-            String connectionParams = configManager.getConfig().getString("database.mysql.connection-parameters", "?autoReconnect=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8");
+            String connectionParams = db.getString("storage.mysql.connection-parameters", "?autoReconnect=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8");
             hikariConfig.addDataSourceProperty("url", "jdbc:mysql://" + host + ":" + port + "/" + database + connectionParams);
-            
+
             // 从配置文件读取连接池设置
-            int maxPoolSize = configManager.getConfig().getInt("database.mysql.pool-settings.max-pool-size", 10);
-            int minIdle = configManager.getConfig().getInt("database.mysql.pool-settings.min-idle", 5);
-            long maxLifetime = configManager.getConfig().getLong("database.mysql.pool-settings.max-lifetime", 1800000);
-            long keepAliveTime = configManager.getConfig().getLong("database.mysql.pool-settings.keep-alive-time", 60000);
-            long connectionTimeout = configManager.getConfig().getLong("database.mysql.pool-settings.time-out", 30000);
-            
+            int maxPoolSize = db.getInt("storage.mysql.pool-settings.max-pool-size", 10);
+            int minIdle = db.getInt("storage.mysql.pool-settings.min-idle", 5);
+            long maxLifetime = db.getLong("storage.mysql.pool-settings.max-lifetime", 1800000L);
+            long keepAliveTime = db.getLong("storage.mysql.pool-settings.keep-alive-time", 60000L);
+            long connectionTimeout = db.getLong("storage.mysql.pool-settings.time-out", 30000L);
+
             // 连接池配置
             hikariConfig.setMaximumPoolSize(maxPoolSize);
             hikariConfig.setMinimumIdle(minIdle);
@@ -73,12 +171,15 @@ public class DatabaseManager {
             hikariConfig.setIdleTimeout(600000);
             hikariConfig.setMaxLifetime(maxLifetime);
             hikariConfig.setKeepaliveTime(keepAliveTime);
-            
+
             dataSource = new HikariDataSource(hikariConfig);
-            connection = dataSource.getConnection();
+            // 仅做一次连通性验证，随后立即归还连接（避免占用池配额）
+            try (Connection probe = dataSource.getConnection()) {
+                probe.isValid(3);
+            }
         } else {
             Class.forName("org.sqlite.JDBC");
-            sqliteFile = configManager.getConfig().getString("database.sqlite.file", "alembc.db");
+            sqliteFile = db.getString("storage.sqlite.file", "alembc.db");
             connection = DriverManager.getConnection("jdbc:sqlite:" + plugin.getDataFolder() + "/" + sqliteFile);
         }
 
@@ -172,7 +273,13 @@ public class DatabaseManager {
         }
     }
 
+    // 进程内已知玩家缓存：避免热路径（挖方块/拾取/余额）每次都先 SELECT players
+    private final java.util.Set<UUID> knownPlayers = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     public void ensurePlayerExists(UUID uuid) throws SQLException, ClassNotFoundException {
+        if (knownPlayers.contains(uuid)) {
+            return;
+        }
         String checkPlayer = "SELECT * FROM " + tablePrefix + "players WHERE uuid = ?";
         String insertPlayer = "INSERT INTO " + tablePrefix + "players (uuid, emc_balance, autosell_enabled) VALUES (?, 0, 0)";
 
@@ -220,6 +327,7 @@ public class DatabaseManager {
                 }
             }
         }
+        knownPlayers.add(uuid);
     }
 
     public double getEMCBalance(UUID uuid) throws SQLException, ClassNotFoundException {
@@ -291,7 +399,7 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+}
 
     public void addEMCBalance(UUID uuid, double amount) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -320,7 +428,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     public boolean tryWithdrawEMC(UUID uuid, double amount) throws SQLException, ClassNotFoundException {
         if (amount <= 0) {
@@ -337,7 +446,9 @@ public class DatabaseManager {
                 stmt.setDouble(1, amount);
                 stmt.setString(2, uuid.toString());
                 stmt.setDouble(3, amount);
-                return stmt.executeUpdate() > 0;
+                boolean ok = stmt.executeUpdate() > 0;
+                if (ok) publishSync(uuid);
+                return ok;
             }
         } else {
             Connection conn = getConnection();
@@ -346,7 +457,9 @@ public class DatabaseManager {
                 stmt.setDouble(1, amount);
                 stmt.setString(2, uuid.toString());
                 stmt.setDouble(3, amount);
-                return stmt.executeUpdate() > 0;
+                boolean ok = stmt.executeUpdate() > 0;
+                if (ok) publishSync(uuid);
+                return ok;
             } finally {
                 if (stmt != null) {
                     stmt.close();
@@ -390,6 +503,8 @@ public class DatabaseManager {
             }
 
             conn.commit();
+            publishSync(fromUuid);
+            publishSync(toUuid);
             return true;
         } catch (SQLException e) {
             try {
@@ -532,7 +647,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     public void addMineProgress(UUID uuid, String material, int amount) throws SQLException, ClassNotFoundException {
         // 如果物品已解锁，不再记录进度
@@ -573,7 +689,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     public int getSellProgress(UUID uuid, String material) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -695,7 +812,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     public void addSellProgress(UUID uuid, String material, int amount) throws SQLException, ClassNotFoundException {
         // 如果物品已解锁，不再记录进度
@@ -740,7 +858,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     public boolean isUnlocked(UUID uuid, String material) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -809,7 +928,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     public void unlockAllItems(UUID uuid) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -894,7 +1014,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     public boolean isAutoSellEnabled(UUID uuid) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -964,7 +1085,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     // 批量获取多个物品的解锁状态
     public Map<String, Boolean> getUnlockedStatuses(UUID uuid, List<String> materials) throws SQLException, ClassNotFoundException {
@@ -1291,6 +1413,7 @@ public class DatabaseManager {
             }
 
             conn.commit();
+            publishSync(uuid);
             return allowed;
         } catch (SQLException e) {
             try {
@@ -1307,7 +1430,7 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+}
 
     public void addDailyEMCEarned(UUID uuid, String date, double amount) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -1346,7 +1469,8 @@ public class DatabaseManager {
                 }
             }
         }
-    }
+            publishSync(uuid);
+}
 
     /**
      * 清理过期的每日EMC记录（保留最近7天）

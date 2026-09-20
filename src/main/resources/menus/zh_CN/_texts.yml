@@ -1,0 +1,138 @@
+# 菜单文本兜底（供旧版配置升级时补缺；正常情况请直接改各菜单 yml）
+main:
+  title: '&8&lEMC 交易所'
+  S:
+    name: '&a&l出售物品'
+    lore:
+    - '&6▶ &8说明'
+    - '&a▸&7将物品放入出售界面'
+    - '&a▸&7点击确认即可兑换 EMC'
+    - ''
+    - '&6▶ &8账户信息'
+    - '&a▸&7当前余额：%balance% EMC'
+    - '&a▸&7今日限额：%daily_limit%'
+    - ''
+    - '&6▶ &8操作'
+    - '&7•&a鼠标左键&a➤&f打开出售界面'
+  E:
+    name: '&a&l兑换物品'
+    lore:
+    - '&6▶ &8说明'
+    - '&a▸&7使用 EMC 兑换已解锁的物品'
+    - ''
+    - '&6▶ &8账户信息'
+    - '&a▸&7当前余额：%balance% EMC'
+    - ''
+    - '&6▶ &8操作'
+    - '&7•&a鼠标左键&a➤&f打开兑换界面'
+  B:
+    name: '&e&l浏览物品'
+    lore:
+    - '&6▶ &8说明'
+    - '&a▸&7查看所有物品的 EMC 价值'
+    - '&a▸&7追踪解锁进度'
+    - ''
+    - '&6▶ &8操作'
+    - '&7•&a鼠标左键&a➤&f打开浏览界面'
+  C:
+    name: '&c&l关闭'
+    lore:
+    - '&7•&c鼠标左键&a➤&f关闭菜单'
+sell:
+  title: '&8&lEMC 出售'
+  I:
+    name: '&e&l出售信息'
+    lore:
+    - '&6▶ &8说明'
+    - '&a▸&7将物品放入下方空格'
+    - '&a▸&7点击出售按钮兑换 EMC'
+    - ''
+    - '&6▶ &8交易信息'
+    - '&a▸&7出售税率：%tax%%'
+  S:
+    name: '&a&l确认出售'
+    lore:
+    - '&6▶ &8操作'
+    - '&7•&a鼠标左键&a➤&f出售界面内所有物品'
+  K:
+    name: '&c&l返回'
+    lore:
+    - '&7•&c鼠标左键&a➤&f返回主菜单'
+browse:
+  title: '&8&l物品浏览 %page_display%'
+  A:
+    name: '&e%item_name%'
+    lore:
+    - '&6▶ &8物品信息'
+    - '&a▸&7物品名称：%item_name%'
+    - '&a▸&7物品ID：%item_id%'
+    - '&a▸&7EMC价值：%emc%'
+    - ''
+    - '&6▶ &8解锁进度'
+    - '&a▸&7挖掘进度：%mine_progress%'
+    - '&a▸&7出售进度：%sell_progress%'
+    - '&a▸&7解锁状态：%unlock_status%'
+  K:
+    name: '&c&l返回'
+    lore:
+    - '&7•&c鼠标左键&a➤&f返回主菜单'
+  N:
+    name: '&a上一页 (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&a鼠标左键&a➤&f翻到上一页'
+  Q:
+    name: '&a搜索'
+    lore:
+    - '&f当前搜索：%current_search%'
+    - '&a左键 搜索'
+    - '&e右键 清除搜索'
+  P:
+    name: '&e第 %current_page% 页 / 共 %total_pages% 页'
+    lore:
+    - '&6▶ &8统计'
+    - '&a▸&7物品总数：%total_items%'
+  X:
+    name: '&a下一页 (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&a鼠标左键&a➤&f翻到下一页'
+exchange:
+  title: '&8&l物品兑换 %page_display%'
+  I:
+    name: '&e&l余额信息'
+    lore:
+    - '&6▶ &8账户信息'
+    - '&a▸&7当前余额：%balance% EMC'
+  A:
+    name: '&a%item_name%'
+    lore:
+    - '&6▶ &8物品信息'
+    - '&a▸&7物品名称：%item_name%'
+    - '&a▸&7物品ID：%item_id%'
+    - '&a▸&7EMC价值：%emc%'
+    - ''
+    - '&6▶ &8操作'
+    - '&7•&a鼠标左键&a➤&f购买 1 个'
+    - '&7•&e鼠标右键&a➤&f购买 64 个'
+  K:
+    name: '&c&l返回'
+    lore:
+    - '&7•&c鼠标左键&a➤&f返回主菜单'
+  N:
+    name: '&a上一页 (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&a鼠标左键&a➤&f翻到上一页'
+  Q:
+    name: '&a搜索'
+    lore:
+    - '&f当前搜索：%current_search%'
+    - '&a左键 搜索'
+    - '&e右键 清除搜索'
+  P:
+    name: '&e第 %current_page% 页 / 共 %total_pages% 页'
+    lore:
+    - '&6▶ &8统计'
+    - '&a▸&7物品总数：%total_items%'
+  X:
+    name: '&a下一页 (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&a鼠标左键&a➤&f翻到下一页'

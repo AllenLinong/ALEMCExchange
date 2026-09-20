@@ -13,6 +13,11 @@ public class SchedulerUtil {
 
     private final JavaPlugin plugin;
     private final boolean isFolia;
+    // 反射方法缓存：避免每次调度都 getMethod 查找
+    private java.lang.reflect.Method foliaRun;
+    private java.lang.reflect.Method foliaRunDelayed;
+    private java.lang.reflect.Method foliaRunAtFixedRate;
+    private java.lang.reflect.Method foliaCancelTasks;
     private Object globalRegionScheduler;
     private Object asyncScheduler;
     private Object regionScheduler;
@@ -42,6 +47,10 @@ public class SchedulerUtil {
             globalRegionScheduler = server.getClass().getMethod("getGlobalRegionScheduler").invoke(server);
             asyncScheduler = server.getClass().getMethod("getAsyncScheduler").invoke(server);
             regionScheduler = server.getClass().getMethod("getRegionScheduler").invoke(server);
+            foliaRun = globalRegionScheduler.getClass().getMethod("run", Plugin.class, Consumer.class);
+            foliaRunDelayed = globalRegionScheduler.getClass().getMethod("runDelayed", Plugin.class, Consumer.class, long.class);
+            foliaRunAtFixedRate = asyncScheduler.getClass().getMethod("runAtFixedRate", Plugin.class, Consumer.class, long.class, long.class, java.util.concurrent.TimeUnit.class);
+            foliaCancelTasks = globalRegionScheduler.getClass().getMethod("cancelTasks", Plugin.class);
             return globalRegionScheduler != null && asyncScheduler != null;
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to initialize Folia schedulers", e);
@@ -66,9 +75,7 @@ public class SchedulerUtil {
     public void runTask(Runnable task) {
         if (isFolia) {
             try {
-                globalRegionScheduler.getClass()
-                        .getMethod("run", Plugin.class, Consumer.class)
-                        .invoke(globalRegionScheduler, plugin, (Consumer<Object>) s -> task.run());
+                foliaRun.invoke(globalRegionScheduler, plugin, (Consumer<Object>) s -> task.run());
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Folia runTask failed", e);
             }
@@ -80,9 +87,7 @@ public class SchedulerUtil {
     public void runTaskLater(Runnable task, long delay) {
         if (isFolia) {
             try {
-                globalRegionScheduler.getClass()
-                        .getMethod("runDelayed", Plugin.class, Consumer.class, long.class)
-                        .invoke(globalRegionScheduler, plugin, (Consumer<Object>) s -> task.run(), delay);
+                foliaRunDelayed.invoke(globalRegionScheduler, plugin, (Consumer<Object>) s -> task.run(), delay);
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Folia runTaskLater failed", e);
             }
@@ -94,15 +99,28 @@ public class SchedulerUtil {
     public void runTimerAsync(Runnable task, long delay, long period) {
         if (isFolia) {
             try {
-                asyncScheduler.getClass()
-                        .getMethod("runAtFixedRate", Plugin.class, Consumer.class, long.class, long.class, java.util.concurrent.TimeUnit.class)
-                        .invoke(asyncScheduler, plugin, (Consumer<Object>) s -> task.run(),
-                                delay * 50L, period * 50L, java.util.concurrent.TimeUnit.MILLISECONDS);
+                foliaRunAtFixedRate.invoke(asyncScheduler, plugin, (Consumer<Object>) s -> task.run(),
+                        delay * 50L, period * 50L, java.util.concurrent.TimeUnit.MILLISECONDS);
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Folia runTimerAsync failed", e);
             }
         } else {
             Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, task, delay, period);
+        }
+    }
+
+    public void runAtEntityLater(Entity entity, Runnable task, long delayTicks) {
+        if (isFolia) {
+            try {
+                Object entityScheduler = entity.getClass().getMethod("getScheduler").invoke(entity);
+                entityScheduler.getClass()
+                        .getMethod("runDelayed", Plugin.class, Consumer.class, Runnable.class, long.class)
+                        .invoke(entityScheduler, plugin, (Consumer<Object>) x -> task.run(), null, delayTicks);
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Folia runAtEntityLater failed", e);
+            }
+        } else {
+            Bukkit.getScheduler().runTaskLater(plugin, task, delayTicks);
         }
     }
 
@@ -138,9 +156,7 @@ public class SchedulerUtil {
     public void cancelTasks() {
         if (isFolia) {
             try {
-                globalRegionScheduler.getClass()
-                        .getMethod("cancelTasks", Plugin.class)
-                        .invoke(globalRegionScheduler, plugin);
+                foliaCancelTasks.invoke(globalRegionScheduler, plugin);
                 asyncScheduler.getClass()
                         .getMethod("cancelTasks", Plugin.class)
                         .invoke(asyncScheduler, plugin);

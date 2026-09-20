@@ -1,0 +1,77 @@
+title: '&8&l物品兑换 %page_display%'
+shape:
+- '####I####'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- '#AAAAAAA#'
+- 'N#Q#K###P'
+items:
+  '#':
+    type: BLACK_STAINED_GLASS_PANE
+    name: ' '
+  A:
+    name: '&a%item_name%'
+    lore:
+    - '&6▶ &8物品信息'
+    - '&a▸&7物品名称：%item_name%'
+    - '&a▸&7物品ID：%item_id%'
+    - '&a▸&7EMC价值：%emc%'
+    - ''
+    - '&6▶ &8操作'
+    - '&7•&a鼠标左键&a➤&f购买 1 个'
+    - '&7•&e鼠标右键&a➤&f购买 64 个'
+    triggers:
+      left:
+      - 'sound: ENTITY_EXPERIENCE_ORB_PICKUP-1-1'
+      - 'exchange_buy_1'
+      right:
+      - 'sound: ENTITY_EXPERIENCE_ORB_PICKUP-1-1'
+      - 'exchange_buy_64'
+  I:
+    type: NETHER_STAR
+    name: '&e&l余额信息'
+    lore:
+    - '&6▶ &8账户信息'
+    - '&a▸&7当前余额：%balance% EMC'
+  K:
+    type: ARROW
+    name: '&c&l返回'
+    lore:
+    - '&7•&c鼠标左键&a➤&f返回主菜单'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'back'
+  N:
+    type: SPECTRAL_ARROW
+    name: '&a上一页 (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&a鼠标左键&a➤&f翻到上一页'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'prev_page'
+  Q:
+    type: COMPASS
+    name: '&a搜索'
+    lore:
+    - '&f当前搜索：%current_search%'
+    - '&a左键 搜索'
+    - '&e右键 清除搜索'
+    triggers:
+      left:
+      - 'sound: BLOCK_NOTE_BLOCK_PLING-1-2'
+      - 'search'
+      right:
+      - 'sound: BLOCK_NOTE_BLOCK_PLING-1-2'
+      - 'clear_search'
+  P:
+    type: SPECTRAL_ARROW
+    name: '&a下一页 (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&a鼠标左键&a➤&f翻到下一页'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'next_page'

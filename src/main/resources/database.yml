@@ -1,0 +1,66 @@
+# ═══════════════════════════════════════════════════════════
+#  ALEMCExchange 数据库配置
+#  （首次运行时会自动从 config.yml 的 database 段迁移过来）
+# ═══════════════════════════════════════════════════════════
+
+storage:
+  # 数据库类型：sqlite 或 mysql
+  type: sqlite
+
+  # 表名前缀，用于避免表名冲突
+  table-prefix: "alembc_"
+
+  sqlite:
+    # SQLite 数据库文件名称（位于插件数据目录下）
+    file: "alembc.db"
+
+  mysql:
+    host: localhost
+    port: 3306
+    database: minecraft
+    user: root
+    password: ""
+    # 连接参数
+    connection-parameters: "?autoReconnect=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8"
+    # 连接池设置
+    pool-settings:
+      # 最大连接数
+      max-pool-size: 10
+      # 最小空闲连接数
+      min-idle: 5
+      # 连接最大生命周期（毫秒）
+      max-lifetime: 1800000
+      # 连接保持时间（毫秒）
+      keep-alive-time: 60000
+      # 连接超时（毫秒）
+      time-out: 30000
+
+# ── 跨服实时同步 ─────────────────────────────────────────
+# 需求：多个服务器共用同一个 MySQL 数据库。
+# 开启后，任意服务器上的余额/解锁/进度变动会实时同步到其他
+# 服务器：缓存失效 + 已打开的菜单自动刷新。
+# SQLite（单机文件库）无法跨服，此配置不生效。
+sync:
+  enabled: false
+  # 同步通道：
+  #   polling - MySQL 事件表轮询（默认，无需额外组件）
+  #   redis   - Redis 发布/订阅（延迟更低，推荐多服使用；需 Redis 服务）
+  mode: polling
+  # 本服唯一标识（同一数据库下的每个服务器必须不同）
+  server-id: "server-1"
+  # 轮询间隔（tick，20 tick = 1 秒），推荐 10（0.5 秒）
+  # Redis 模式下作为消息合并发布周期
+  poll-interval-ticks: 10
+  # 事件保留时长（分钟），过期事件自动清理（仅 polling 模式）
+  event-retention-minutes: 10
+  # Redis 连接（仅 mode: redis 时使用）
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    # 密码（无密码留空；Redis 6+ ACL 可再填 username）
+    password: ""
+    username: ""
+    # 频道名（所有服务器保持一致）
+    channel: "alemcexchange-sync"
+    # 断线重连间隔（秒）
+    reconnect-seconds: 5

@@ -1,0 +1,98 @@
+title: '&8&lEMC Exchange'
+shape:
+- '#########'
+- '##S#E#B##'
+- '####C####'
+items:
+  '#':
+    type: BLACK_STAINED_GLASS_PANE
+    name: ' '
+  S:
+    type: SUNFLOWER
+    name: '&a&lSell Items'
+    lore:
+    - '&6▶ &8Info'
+    - '&a▸&7Put items into the sell menu'
+    - '&a▸&7Confirm to convert into EMC'
+    - ''
+    - '&6▶ &8Account'
+    - '&a▸&7Balance: %balance% EMC'
+    - '&a▸&7Daily limit: %daily_limit%'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fOpen sell menu'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'open: sell'
+  E:
+    type: EMERALD
+    name: '&a&lExchange Items'
+    lore:
+    - '&6▶ &8Info'
+    - '&a▸&7Exchange EMC for unlocked items'
+    - ''
+    - '&6▶ &8Account'
+    - '&a▸&7Balance: %balance% EMC'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fOpen exchange menu'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'open: exchange'
+  B:
+    type: BOOK
+    name: '&e&lBrowse Items'
+    lore:
+    - '&6▶ &8Info'
+    - '&a▸&7View EMC values of all items'
+    - '&a▸&7Track unlock progress'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fOpen browse menu'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'open: browse'
+  C:
+    type: BARRIER
+    name: '&c&lClose'
+    lore:
+    - '&7•&cLeft-click&a➤&fClose menu'
+    triggers:
+      left:
+      - 'sound: UI_BUTTON_CLICK-1-1'
+      - 'close'
+
+# ══════════════════════════ 配置说明 ══════════════════════════
+# ◆ 位置：shape 每行 9 字符 = 一行槽位（1-6 行）；相同字符共享按钮定义。
+#   字符在 items 中有定义且有图标才会放置；未定义的字符 = 空槽。
+#   A = 物品展示区（浏览/兑换），出售菜单的 A = 自由放入区。
+#   '#' 就是普通按钮字符（玻璃填充）；type: AIR = 该槽留空。
+#
+# ◆ 按钮字段：type（图标）/ name / lore / triggers（动作）。
+#   图标 type 支持原版材质、"ce:命名空间:id"（CraftEngine）或 craftengine: 字段。
+#
+# ◆ 全部可用动作（triggers 列表元素，建议带引号）：
+#   'open: 菜单名'                        打开任意菜单（含自定义，文件名去掉 .yml）
+#   'open_gui: 菜单名'                    同上（ALwarp 兼容别名）
+#   'command: 命令'                       以玩家身份执行（不含开头 /）
+#   'console_command: 命令'               以控制台执行，支持 %player% 占位符
+#   'message: 文本'                       给玩家发送彩色消息
+#   'sound: 音效名-音量-音调'             播放音效，如 sound: BLOCK_NOTE_BLOCK_PLING-1-2
+#   'delay: 2t'                           延迟后续动作；t=tick、s=秒、ms=毫秒，无单位=秒
+#   'close'                               关闭菜单
+#   'back'                                返回主菜单
+#   'prev_page' / 'next_page'             上一页 / 下一页（首页/末页自动隐藏）
+#   'search' / 'clear_search'             开始搜索 / 清除搜索（列表菜单）
+#   'sell'                                出售确认（出售菜单）
+#   'exchange_buy_1' / 'exchange_buy_64'  购买 1 个 / 64 个（物品区专用，未解锁拦截）
+#
+# ◆ 点击类型：left / right / shift_left / shift_right（triggers 下的键）。
+#   单条可写字符串，多条写列表；动作按顺序执行，可组合音效+延迟+动作。
+#
+# ◆ 占位符：%item_name% %item_id% %emc% %mine_progress% %sell_progress% %unlock_status%
+#   %balance% %tax% %daily_limit% %player%
+#   %current_page% %total_pages% %total_items% %current_search% %page_display%
+# ═══════════════════════════════════════════════════════════════

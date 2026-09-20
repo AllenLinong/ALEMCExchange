@@ -1,0 +1,138 @@
+# 菜单文本兜底（供旧版配置升级时补缺；正常情况请直接改各菜单 yml）
+main:
+  title: '&8&lEMC Exchange'
+  S:
+    name: '&a&lSell Items'
+    lore:
+    - '&6▶ &8Info'
+    - '&a▸&7Put items into the sell menu'
+    - '&a▸&7Confirm to convert into EMC'
+    - ''
+    - '&6▶ &8Account'
+    - '&a▸&7Balance: %balance% EMC'
+    - '&a▸&7Daily limit: %daily_limit%'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fOpen sell menu'
+  E:
+    name: '&a&lExchange Items'
+    lore:
+    - '&6▶ &8Info'
+    - '&a▸&7Exchange EMC for unlocked items'
+    - ''
+    - '&6▶ &8Account'
+    - '&a▸&7Balance: %balance% EMC'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fOpen exchange menu'
+  B:
+    name: '&e&lBrowse Items'
+    lore:
+    - '&6▶ &8Info'
+    - '&a▸&7View EMC values of all items'
+    - '&a▸&7Track unlock progress'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fOpen browse menu'
+  C:
+    name: '&c&lClose'
+    lore:
+    - '&7•&cLeft-click&a➤&fClose menu'
+sell:
+  title: '&8&lEMC Selling'
+  I:
+    name: '&e&lSell Info'
+    lore:
+    - '&6▶ &8Info'
+    - '&a▸&7Place items in the slots below'
+    - '&a▸&7Click the sell button to convert'
+    - ''
+    - '&6▶ &8Trading'
+    - '&a▸&7Tax rate: %tax%%'
+  S:
+    name: '&a&lConfirm Sell'
+    lore:
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fSell all items in the menu'
+  K:
+    name: '&c&lBack'
+    lore:
+    - '&7•&cLeft-click&a➤&fBack to main menu'
+browse:
+  title: '&8&lItem Browser %page_display%'
+  A:
+    name: '&e%item_name%'
+    lore:
+    - '&6▶ &8Item Info'
+    - '&a▸&7Name: %item_name%'
+    - '&a▸&7ID: %item_id%'
+    - '&a▸&7EMC value: %emc%'
+    - ''
+    - '&6▶ &8Unlock Progress'
+    - '&a▸&7Mined: %mine_progress%'
+    - '&a▸&7Sold: %sell_progress%'
+    - '&a▸&7Status: %unlock_status%'
+  K:
+    name: '&c&lBack'
+    lore:
+    - '&7•&cLeft-click&a➤&fBack to main menu'
+  N:
+    name: '&aPrevious Page (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&aLeft-click&a➤&fGo to previous page'
+  Q:
+    name: '&aSearch'
+    lore:
+    - '&fCurrent search: %current_search%'
+    - '&aLeft-click to search'
+    - '&eRight-click to clear'
+  P:
+    name: '&ePage %current_page% of %total_pages%'
+    lore:
+    - '&6▶ &8Stats'
+    - '&a▸&7Total items: %total_items%'
+  X:
+    name: '&aNext Page (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&aLeft-click&a➤&fGo to next page'
+exchange:
+  title: '&8&lItem Exchange %page_display%'
+  I:
+    name: '&e&lBalance Info'
+    lore:
+    - '&6▶ &8Account'
+    - '&a▸&7Balance: %balance% EMC'
+  A:
+    name: '&a%item_name%'
+    lore:
+    - '&6▶ &8Item Info'
+    - '&a▸&7Name: %item_name%'
+    - '&a▸&7ID: %item_id%'
+    - '&a▸&7EMC value: %emc%'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fBuy 1'
+    - '&7•&eRight-click&a➤&fBuy 64'
+  K:
+    name: '&c&lBack'
+    lore:
+    - '&7•&cLeft-click&a➤&fBack to main menu'
+  N:
+    name: '&aPrevious Page (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&aLeft-click&a➤&fGo to previous page'
+  Q:
+    name: '&aSearch'
+    lore:
+    - '&fCurrent search: %current_search%'
+    - '&aLeft-click to search'
+    - '&eRight-click to clear'
+  P:
+    name: '&ePage %current_page% of %total_pages%'
+    lore:
+    - '&6▶ &8Stats'
+    - '&a▸&7Total items: %total_items%'
+  X:
+    name: '&aNext Page (%current_page%/%total_pages%)'
+    lore:
+    - '&7•&aLeft-click&a➤&fGo to next page'

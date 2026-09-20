@@ -29,13 +29,16 @@ public class PlayerPickupItemListener implements Listener {
     private final SchedulerUtil schedulerUtil;
     private com.alemcexchange.util.MenuManager menuManager;
     private final ConcurrentHashMap<String, Boolean> autoSellCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Player, ConcurrentHashMap<Material, Integer>> pickupCounters = new ConcurrentHashMap<>();
+    // 值 = long[]{数量, 最后拾取时间戳}
+    private final ConcurrentHashMap<Player, ConcurrentHashMap<Material, long[]>> pickupCounters = new ConcurrentHashMap<>();
+    private static final long IDLE_FLUSH_MILLIS = 5000L;
 
     public PlayerPickupItemListener(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager) {
         this.plugin = plugin;
         this.configManager = configManager;
         this.databaseManager = databaseManager;
         this.schedulerUtil = new SchedulerUtil(plugin);
+        startIdleFlushTask();
     }
 
     public void setMenuManager(com.alemcexchange.util.MenuManager menuManager) {
@@ -86,15 +89,18 @@ public class PlayerPickupItemListener implements Listener {
                     }
 
                     int batchThreshold = configManager.getConfig().getInt("autosell.batch_threshold", 64);
-                    ConcurrentHashMap<Material, Integer> playerCounters = pickupCounters.computeIfAbsent(player, k -> new ConcurrentHashMap<>());
-                    int newCount = playerCounters.getOrDefault(material, 0) + amount;
-                    playerCounters.put(material, newCount);
+                    ConcurrentHashMap<Material, long[]> playerCounters = pickupCounters.computeIfAbsent(player, k -> new ConcurrentHashMap<>());
+                    long[] counter = playerCounters.compute(material, (k, v) ->
+                            v == null ? new long[]{amount, System.currentTimeMillis()}
+                                    : new long[]{v[0] + amount, System.currentTimeMillis()});
+                    long newCount = counter[0];
 
                     if (newCount >= batchThreshold) {
                         if (databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
-                            processAutoSell(player, material, newCount);
+                            processAutoSell(player, material, (int) Math.min(newCount, Integer.MAX_VALUE));
+                            playerCounters.remove(material);
                         }
-                        playerCounters.remove(material);
+                        // 未解锁：保留计数，解锁后由闲置结算或下一批触发
                     }
                 } catch (SQLException | ClassNotFoundException e) {
                     plugin.getLogger().severe("Error handling auto sell: " + e.getMessage());
@@ -292,6 +298,37 @@ public class PlayerPickupItemListener implements Listener {
         Player player = event.getPlayer();
         pickupCounters.remove(player);
         autoSellCache.remove(player.getUniqueId().toString());
+    }
+
+    /**
+     * 闲置尾数结算：计数停止增长 5 秒后，即使不足批量阈值也结算一次，
+     * 避免"挖了 30 个就收工，永远不触发自动出售"的问题。
+     */
+    private void startIdleFlushTask() {
+        schedulerUtil.runTimerAsync(() -> {
+            long now = System.currentTimeMillis();
+            for (ConcurrentHashMap.Entry<Player, ConcurrentHashMap<Material, long[]>> playerEntry : pickupCounters.entrySet()) {
+                Player player = playerEntry.getKey();
+                if (!player.isOnline()) {
+                    pickupCounters.remove(player);
+                    continue;
+                }
+                ConcurrentHashMap<Material, long[]> counters = playerEntry.getValue();
+                for (ConcurrentHashMap.Entry<Material, long[]> entry : counters.entrySet()) {
+                    long[] counter = entry.getValue();
+                    if (counter[0] <= 0 || now - counter[1] < IDLE_FLUSH_MILLIS) continue;
+                    Material material = entry.getKey();
+                    try {
+                        if (isAutoSellEnabled(player) && databaseManager.isUnlocked(player.getUniqueId(), material.name())) {
+                            processAutoSell(player, material, (int) Math.min(counter[0], Integer.MAX_VALUE));
+                        }
+                        counters.remove(material);
+                    } catch (SQLException | ClassNotFoundException e) {
+                        plugin.getLogger().warning("Idle autosell flush error: " + e.getMessage());
+                    }
+                }
+            }
+        }, 20L, 20L);
     }
 
     private boolean isAutoSellEnabled(Player player) {
