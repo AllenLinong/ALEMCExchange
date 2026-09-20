@@ -1,3 +1,4 @@
+config-version: 2
 title: '&8&lItem Browser %page_display%'
 shape:
 - '####T####'
@@ -14,26 +15,12 @@ items:
     name: '&e%item_name%'
     lore:
     - '&6▶ &8Item Info'
-    - '&a▸&7Name: %item_name%'
-    - '&a▸&7ID: %item_id%'
     - '&a▸&7EMC value: %emc%'
     - ''
     - '&6▶ &8Unlock Progress'
     - '&a▸&7Mined: %mine_progress%'
     - '&a▸&7Sold: %sell_progress%'
     - '&a▸&7Status: %unlock_status%'
-    - ''
-    - '&6▶ &8Actions'
-    - '&7•&aLeft-click&a➤&fBuy 1'
-    - '&7•&eRight-click&a➤&fBuy 64'
-    - '&7•&cLocked items cannot be bought'
-    triggers:
-      left:
-      - 'sound: ENTITY_EXPERIENCE_ORB_PICKUP-1-1'
-      - 'exchange_buy_1'
-      right:
-      - 'sound: ENTITY_EXPERIENCE_ORB_PICKUP-1-1'
-      - 'exchange_buy_64'
   K:
     type: ARROW
     name: '&c&lBack'

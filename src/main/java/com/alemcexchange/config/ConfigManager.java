@@ -14,6 +14,8 @@ import java.util.Map;
 
 public class ConfigManager {
 
+    private static final int CURRENT_CONFIG_VERSION = 2;
+
     private final JavaPlugin plugin;
     private YamlConfiguration config;
     private YamlConfiguration lang;
@@ -128,17 +130,60 @@ public class ConfigManager {
         return configStamp;
     }
 
+    private YamlConfiguration loadBundledYaml(String resourcePath) {
+        YamlConfiguration defaults = new YamlConfiguration();
+        try (java.io.InputStream in = plugin.getResource(resourcePath);
+             java.io.BufferedReader reader = in == null ? null
+                     : new java.io.BufferedReader(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8))) {
+            if (reader != null) {
+                StringBuilder content = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) content.append(line).append('\n');
+                defaults.loadFromString(content.toString());
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to load bundled config " + resourcePath + ": " + e.getMessage());
+        }
+        return defaults;
+    }
+
+    private boolean mergeMissingKeys(YamlConfiguration target, YamlConfiguration defaults) {
+        boolean changed = false;
+        for (String path : defaults.getKeys(true)) {
+            if (defaults.isConfigurationSection(path)) continue;
+            if (!target.contains(path)) {
+                target.set(path, defaults.get(path));
+                changed = true;
+            }
+        }
+        if (target.getInt("config-version", 0) < CURRENT_CONFIG_VERSION) {
+            target.set("config-version", CURRENT_CONFIG_VERSION);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private void saveMigratedYaml(File file, YamlConfiguration yaml, String label) {
+        try {
+            yaml.save(file);
+        } catch (IOException e) {
+            plugin.getLogger().warning("Could not save migrated " + label + ": " + e.getMessage());
+        }
+    }
+
     private YamlConfiguration loadConfigFile(String filename) {
         File file = new File(plugin.getDataFolder(), filename);
         if (!file.exists()) {
-            // 防御：资源未打进 jar 时 saveResource 会抛 IllegalArgumentException 并中断启用
             if (plugin.getResource(filename) == null) {
                 plugin.getLogger().severe("Bundled resource '" + filename + "' not found in jar, cannot create " + filename);
                 return new YamlConfiguration();
             }
             plugin.saveResource(filename, false);
         }
-        return YamlConfiguration.loadConfiguration(file);
+        YamlConfiguration loaded = YamlConfiguration.loadConfiguration(file);
+        YamlConfiguration defaults = loadBundledYaml(filename);
+        if (mergeMissingKeys(loaded, defaults)) saveMigratedYaml(file, loaded, filename);
+        return loaded;
     }
 
     /**
@@ -376,7 +421,11 @@ public class ConfigManager {
         if (files != null) {
             for (File f : files) {
                 String tag = f.getName().substring(0, f.getName().length() - 4);
-                langFiles.put(tag, YamlConfiguration.loadConfiguration(f));
+                YamlConfiguration loaded = YamlConfiguration.loadConfiguration(f);
+                if (mergeMissingKeys(loaded, loadBundledYaml("lang/" + tag + ".yml"))) {
+                    saveMigratedYaml(f, loaded, "lang/" + tag + ".yml");
+                }
+                langFiles.put(tag, loaded);
             }
         }
         lang = getLang();
@@ -549,6 +598,7 @@ public class ConfigManager {
             // （旧 menus.yml 格式读不出布局的情况下，保证标准菜单可用）
             extractMissingBundledMenus(menusDir);
         }
+        migrateMenuFiles(menusDir);
 
         // 按 config.language 加载对应语言目录（无则取第一个可用目录）
         menuConfigs.clear();
@@ -571,6 +621,24 @@ public class ConfigManager {
         }
         if (menuConfigs.isEmpty()) {
             plugin.getLogger().severe("No menu files loaded from menus/ directory!");
+        }
+    }
+
+    private void migrateMenuFiles(File menusDir) {
+        File[] languageDirs = menusDir.listFiles(File::isDirectory);
+        if (languageDirs == null) return;
+        for (File languageDir : languageDirs) {
+            String tag = languageDir.getName();
+            File[] files = languageDir.listFiles((dir, name) -> name.toLowerCase().endsWith(".yml"));
+            if (files == null) continue;
+            for (File file : files) {
+                String name = file.getName().substring(0, file.getName().length() - 4);
+                if (name.startsWith("_")) continue;
+                YamlConfiguration loaded = YamlConfiguration.loadConfiguration(file);
+                if (mergeMissingKeys(loaded, loadBundledYaml("menus/" + tag + "/" + file.getName()))) {
+                    saveMigratedYaml(file, loaded, "menus/" + tag + "/" + file.getName());
+                }
+            }
         }
     }
 

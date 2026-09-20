@@ -1,3 +1,4 @@
+config-version: 2
 # 数据库与跨服同步配置见 database.yml
 # ── 语言设置 ──
 # language: 服务器语言，决定加载 menus/<语言>/ 菜单目录与 lang/<语言>.yml 消息文件

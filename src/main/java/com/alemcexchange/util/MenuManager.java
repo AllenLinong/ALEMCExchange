@@ -665,6 +665,11 @@ public class MenuManager implements Listener {
         };
 
         // 动作优先从布局配置按槽位字符解析；triggers 优先于 action 快捷方式
+        String itemKey = null;
+        if (clicked.hasItemMeta() && clicked.getItemMeta() != null) {
+            itemKey = clicked.getItemMeta().getPersistentDataContainer()
+                    .get(keyItem, PersistentDataType.STRING);
+        }
         List<String> actions = new ArrayList<>();
         MenuLayout layout = holder.layout();
         if (layout != null && slot >= 0 && slot < layout.size) {
@@ -672,17 +677,19 @@ public class MenuManager implements Listener {
             ButtonDef def = layout.buttons.get(ch);
             if (def != null) {
                 List<String> triggered = def.triggers.get(clickKind);
+                if (triggered == null && clickKind.startsWith("shift_")) {
+                    triggered = def.triggers.get(clickKind.substring("shift_".length()));
+                }
                 if (triggered != null) {
                     actions.addAll(triggered);
                 } else {
-                    String single = "right".equals(clickKind) && def.rightAction != null
+                    String single = clickKind.endsWith("right") && def.rightAction != null
                             ? def.rightAction : def.action;
                     if (single != null) actions.add(single);
                 }
             }
         }
         // 兜底：物品 PDC，供兑换物品等动态图标使用
-        String itemKey = null;
         if (actions.isEmpty() && clicked.hasItemMeta() && clicked.getItemMeta() != null) {
             var pdc = clicked.getItemMeta().getPersistentDataContainer();
             String pdcAction = pdc.get(keyAction, PersistentDataType.STRING);
@@ -703,19 +710,14 @@ public class MenuManager implements Listener {
         final String finalItemKey = itemKey;
         final String menuType = holder.menuType();
         final int page = holder.page();
-        final boolean finalRightClick = "right".equals(clickKind);
         // 延迟到下一 tick 执行（避免在点击事件内关闭/打开界面的边界问题）
         schedulerUtil.runAtEntity(player, () -> {
-            runTriggerList(player, finalActions, menuType, page, 0);
-            // 兜底：未声明购买动作的旧配置，兑换菜单点击物品仍按左1/右64购买
-            if (finalItemKey != null && finalActions.isEmpty() && "exchange".equals(menuType)) {
-                handleExchangeBuy(player, finalItemKey, finalRightClick);
-            }
+            runTriggerList(player, finalActions, finalItemKey, menuType, page, 0);
         }, null);
     }
 
     /** ALwarp 风格动作列表执行：支持 delay:Nt/Ns/Nms、close、sound:名-音量-音调 */
-    private void runTriggerList(Player player, List<String> actions, String menuType, int page, int startIndex) {
+    private void runTriggerList(Player player, List<String> actions, String itemKey, String menuType, int page, int startIndex) {
         if (actions == null) return;
         for (int i = startIndex; i < actions.size(); i++) {
             String raw = actions.get(i) == null ? "" : actions.get(i).trim();
@@ -727,7 +729,7 @@ public class MenuManager implements Listener {
                 if (ticks > 0) {
                     int next = i + 1;
                     schedulerUtil.runAtEntityLater(player,
-                            () -> runTriggerList(player, actions, menuType, page, next), ticks);
+                            () -> runTriggerList(player, actions, itemKey, menuType, page, next), ticks);
                     return;
                 }
                 continue;
@@ -741,7 +743,7 @@ public class MenuManager implements Listener {
                 playActionSound(player, raw.substring(6).trim());
                 continue;
             }
-            executeAction(player, raw, null, menuType, page, false);
+            executeAction(player, raw, itemKey, menuType, page, false);
         }
     }
 
@@ -794,9 +796,6 @@ public class MenuManager implements Listener {
                 case "exchange_buy_64" -> handleExchangeBuy(player, itemKey, true);
                 default -> handleCustomAction(player, action);
             }
-        }
-        if (itemKey != null && "exchange".equals(menuType)) {
-            handleExchangeBuy(player, itemKey, rightClick);
         }
     }
 
