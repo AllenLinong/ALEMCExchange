@@ -43,9 +43,12 @@ items:
     type: COMPASS
     name: '&aSearch'
     lore:
-    - '&fCurrent search: %current_search%'
-    - '&aLeft-click to search'
-    - '&eRight-click to clear'
+    - '&6▶ &8Search Info'
+    - '&a▸&7Current search: %current_search%'
+    - ''
+    - '&6▶ &8Actions'
+    - '&7•&aLeft-click&a➤&fSearch'
+    - '&7•&eRight-click&a➤&fClear search'
     triggers:
       left:
       - 'sound: BLOCK_NOTE_BLOCK_PLING-1-2'

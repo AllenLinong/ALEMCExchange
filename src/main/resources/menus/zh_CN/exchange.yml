@@ -57,9 +57,12 @@ items:
     type: COMPASS
     name: '&a搜索'
     lore:
-    - '&f当前搜索：%current_search%'
-    - '&a左键 搜索'
-    - '&e右键 清除搜索'
+    - '&6▶ &8搜索信息'
+    - '&a▸&7当前搜索：%current_search%'
+    - ''
+    - '&6▶ &8操作'
+    - '&7•&a鼠标左键&a➤&f搜索'
+    - '&7•&e鼠标右键&a➤&f清除搜索'
     triggers:
       left:
       - 'sound: BLOCK_NOTE_BLOCK_PLING-1-2'
