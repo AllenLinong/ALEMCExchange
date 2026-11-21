@@ -303,6 +303,26 @@ public class ConfigManager {
             lang.set("command.unlock.invalid-item", "&c无效的物品ID！");
             langChanged = true;
         }
+        if (!lang.contains("command.lock.usage")) {
+            lang.set("command.lock.usage", "&c用法: /alex lock <玩家> <物品ID>");
+            langChanged = true;
+        }
+        if (!lang.contains("command.lock.success")) {
+            lang.set("command.lock.success", "&a已重新锁定 &6{player} &a的物品: &6{item} &a（该物品解锁进度已重置）！");
+            langChanged = true;
+        }
+        if (!lang.contains("command.lock.invalid-item")) {
+            lang.set("command.lock.invalid-item", "&c无效的物品ID！");
+            langChanged = true;
+        }
+        if (!lang.contains("help.unlock")) {
+            lang.set("help.unlock", "&a/alex unlock <玩家> <物品ID> &7- 解锁玩家的单个物品");
+            langChanged = true;
+        }
+        if (!lang.contains("help.lock")) {
+            lang.set("help.lock", "&a/alex lock <玩家> <物品ID> &7- 重新锁定玩家的物品（重置进度）");
+            langChanged = true;
+        }
 
         // === 搜索功能 ===
         if (!lang.contains("search.prompt")) {

@@ -59,7 +59,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         String subCommand = args[0].toLowerCase();
 
         // 管理员命令可以从后台执行
-        if (subCommand.equals("reload") || subCommand.equals("give") || subCommand.equals("unlockall") || subCommand.equals("set") || subCommand.equals("unlock")) {
+        if (subCommand.equals("reload") || subCommand.equals("give") || subCommand.equals("unlockall") || subCommand.equals("set") || subCommand.equals("unlock") || subCommand.equals("lock")) {
             if (!(sender instanceof Player)) {
                 // 后台执行管理员命令
                 switch (subCommand) {
@@ -88,6 +88,13 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                     case "unlock":
                         if (sender.hasPermission("alemcexchange.admin")) {
                             handleUnlockCommandForConsole(sender, args);
+                        } else {
+                            sendMessage(sender, "command.no-permission");
+                        }
+                        break;
+                    case "lock":
+                        if (sender.hasPermission("alemcexchange.admin")) {
+                            handleLockCommandForConsole(sender, args);
                         } else {
                             sendMessage(sender, "command.no-permission");
                         }
@@ -150,6 +157,9 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             case "unlock":
                 handleUnlockCommand(player, args);
                 break;
+            case "lock":
+                handleLockCommand(player, args);
+                break;
             case "set":
                 handleSetCommand(player, args);
                 break;
@@ -166,7 +176,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            String[] commands = {"help", "sell", "exchange", "browse", "balance", "autosell", "pay", "transfer", "reload", "give", "unlockall", "unlock", "set"};
+            String[] commands = {"help", "sell", "exchange", "browse", "balance", "autosell", "pay", "transfer", "reload", "give", "unlockall", "unlock", "lock", "set"};
             for (String cmd : commands) {
                 if (cmd.startsWith(args[0].toLowerCase())) {
                     completions.add(cmd);
@@ -174,15 +184,15 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             }
         } else if (args.length == 2) {
             String subCommand = args[0].toLowerCase();
-            if (subCommand.equals("pay") || subCommand.equals("transfer") || subCommand.equals("give") || subCommand.equals("unlockall") || subCommand.equals("unlock") || subCommand.equals("set")) {
+            if (subCommand.equals("pay") || subCommand.equals("transfer") || subCommand.equals("give") || subCommand.equals("unlockall") || subCommand.equals("unlock") || subCommand.equals("lock") || subCommand.equals("set")) {
                 for (Player player : Bukkit.getOnlinePlayers()) {
                     if (player.getName().startsWith(args[1])) {
                         completions.add(player.getName());
                     }
                 }
             }
-        } else if (args.length == 3 && args[0].equalsIgnoreCase("unlock")) {
-            // 为 unlock 命令添加物品ID补全
+        } else if (args.length == 3 && (args[0].equalsIgnoreCase("unlock") || args[0].equalsIgnoreCase("lock"))) {
+            // 为 unlock/lock 命令添加物品ID补全
             for (String material : configManager.getItemMaterialNames()) {
                 if (material.toLowerCase().startsWith(args[2].toLowerCase())) {
                     completions.add(material);
@@ -208,6 +218,8 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             player.sendMessage(ColorUtil.translateColorCodes(configManager.getLang().getString("help.give")));
             player.sendMessage(ColorUtil.translateColorCodes(configManager.getLang().getString("help.set")));
             player.sendMessage(ColorUtil.translateColorCodes(configManager.getLang().getString("help.unlockall")));
+            player.sendMessage(ColorUtil.translateColorCodes(configManager.getLang().getString("help.unlock", "&a/alex unlock <玩家> <物品ID> &7- 解锁玩家的单个物品")));
+            player.sendMessage(ColorUtil.translateColorCodes(configManager.getLang().getString("help.lock", "&a/alex lock <玩家> <物品ID> &7- 重新锁定玩家的物品（重置进度）")));
         }
         player.sendMessage(ColorUtil.translateColorCodes(configManager.getLang().getString("help.footer")));
     }
@@ -289,7 +301,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             }
 
             databaseManager.setAutoSellEnabled(player.getUniqueId(), newState);
-            playerPickupItemListener.refreshAutoSellCache();
+            playerPickupItemListener.clearPickupCounts(player);
             String message = configManager.getLang().getString("prefix") + 
                     configManager.getLang().getString("autosell." + (newState ? "enabled" : "disabled"));
             player.sendMessage(ColorUtil.translateColorCodes(message));
@@ -558,6 +570,23 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         }
     }
 
+    /**
+     * 按配置解析物品键（大小写不敏感）。
+     * 返回 items.yml 中书写的原始键，兼容 "ce:命名空间:物品ID" 等 CE 键
+     * （直接 toUpperCase 会破坏 CE 键的小写命名空间导致永远匹配失败）。
+     */
+    private String resolveConfiguredMaterial(String input) {
+        if (input == null || input.isEmpty()) {
+            return null;
+        }
+        for (String material : configManager.getItemMaterialNames()) {
+            if (material.equalsIgnoreCase(input)) {
+                return material;
+            }
+        }
+        return null;
+    }
+
     private void handleUnlockCommand(Player player, String[] args) {
         if (!checkPermission(player, "alemcexchange.admin")) {
             return;
@@ -574,10 +603,8 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             return;
         }
 
-        String material = args[2].toUpperCase();
-
-        // 检查物品是否存在于配置中
-        if (!configManager.hasItem(material)) {
+        String material = resolveConfiguredMaterial(args[2]);
+        if (material == null) {
             sendMessage(player, "command.unlock.invalid-item");
             return;
         }
@@ -606,10 +633,8 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             return;
         }
 
-        String material = args[2].toUpperCase();
-
-        // 检查物品是否存在于配置中
-        if (!configManager.hasItem(material)) {
+        String material = resolveConfiguredMaterial(args[2]);
+        if (material == null) {
             sendMessage(sender, "command.unlock.invalid-item");
             return;
         }
@@ -622,6 +647,72 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             } catch (SQLException | ClassNotFoundException e) {
                 sendMessage(sender, "command.operation-failed");
                 plugin.getLogger().severe("Error unlocking item: " + e.getMessage());
+            }
+        });
+    }
+
+    /** 管理员重新锁定玩家的单个物品：删除解锁记录并重置该物品的解锁进度 */
+    private void handleLockCommand(Player player, String[] args) {
+        if (!checkPermission(player, "alemcexchange.admin")) {
+            return;
+        }
+
+        if (args.length < 3) {
+            sendMessage(player, "command.lock.usage");
+            return;
+        }
+
+        Player target = Bukkit.getPlayer(args[1]);
+        if (target == null) {
+            sendMessage(player, "command.player-not-found");
+            return;
+        }
+
+        String material = resolveConfiguredMaterial(args[2]);
+        if (material == null) {
+            sendMessage(player, "command.lock.invalid-item");
+            return;
+        }
+
+        schedulerUtil.runAsync(() -> {
+            try {
+                databaseManager.lockItem(target.getUniqueId(), material);
+                menuManager.clearPlayerCache(target.getUniqueId());
+                sendMessage(player, "command.lock.success", "player", target.getName(), "item", material);
+            } catch (SQLException | ClassNotFoundException e) {
+                sendMessage(player, "command.operation-failed");
+                plugin.getLogger().severe("Error locking item: " + e.getMessage());
+            }
+        });
+    }
+
+    // 后台执行 lock 命令
+    private void handleLockCommandForConsole(CommandSender sender, String[] args) {
+        if (args.length < 3) {
+            sendMessage(sender, "command.lock.usage");
+            return;
+        }
+
+        Player target = Bukkit.getPlayer(args[1]);
+        if (target == null) {
+            sendMessage(sender, "command.player-not-found");
+            return;
+        }
+
+        String material = resolveConfiguredMaterial(args[2]);
+        if (material == null) {
+            sendMessage(sender, "command.lock.invalid-item");
+            return;
+        }
+
+        schedulerUtil.runAsync(() -> {
+            try {
+                databaseManager.lockItem(target.getUniqueId(), material);
+                menuManager.clearPlayerCache(target.getUniqueId());
+                sendMessage(sender, "command.lock.success", "player", target.getName(), "item", material);
+            } catch (SQLException | ClassNotFoundException e) {
+                sendMessage(sender, "command.operation-failed");
+                plugin.getLogger().severe("Error locking item: " + e.getMessage());
             }
         });
     }

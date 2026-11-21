@@ -58,7 +58,7 @@ public class SchedulerUtil {
         }
     }
 
-    public void runAsync(Runnable task) {
+    public boolean runAsync(Runnable task) {
         if (isFolia) {
             try {
                 asyncScheduler.getClass()
@@ -66,10 +66,12 @@ public class SchedulerUtil {
                         .invoke(asyncScheduler, plugin, (Consumer<Object>) s -> task.run());
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Folia runAsync failed", e);
+                return false;
             }
         } else {
             Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
         }
+        return true;
     }
 
     public void runTask(Runnable task) {
@@ -138,18 +140,20 @@ public class SchedulerUtil {
         }
     }
 
-    public void runAtEntity(Entity entity, Runnable task, Runnable fallback) {
+    public boolean runAtEntity(Entity entity, Runnable task, Runnable fallback) {
         if (isFolia) {
             try {
                 Object entityScheduler = entity.getClass().getMethod("getScheduler").invoke(entity);
-                entityScheduler.getClass()
+                return entityScheduler.getClass()
                         .getMethod("run", Plugin.class, Consumer.class, Runnable.class)
-                        .invoke(entityScheduler, plugin, (Consumer<Object>) s -> task.run(), fallback);
+                        .invoke(entityScheduler, plugin, (Consumer<Object>) s -> task.run(), fallback) != null;
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Folia runAtEntity failed", e);
+                return false;
             }
         } else {
             Bukkit.getScheduler().runTask(plugin, task);
+            return true;
         }
     }
 

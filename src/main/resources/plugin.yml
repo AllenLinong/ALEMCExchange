@@ -1,5 +1,5 @@
 name: ALEMCExchange
-version: 2.0.2
+version: 2.0.4
 author: Allen_Linong
 main: com.alemcexchange.ALEMCExchangePlugin
 api-version: 1.21
@@ -8,7 +8,7 @@ folia-supported: true
 commands:
   alemcexchange:
     description: Main command for ALEMCExchange
-    usage: /<command> [help|sell|exchange|browse|balance|autosell|pay|reload|give|unlockall]
+    usage: /<command> [help|sell|exchange|browse|balance|autosell|pay|reload|give|unlockall|unlock|lock|set]
     aliases:
       - alex
       - aex

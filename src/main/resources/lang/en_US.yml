@@ -31,6 +31,10 @@ command:
     usage: '&cUsage: /alex unlock <player> <item-id>'
     success: '&aUnlocked item &6{item} &afor &6{player}&a!'
     invalid-item: '&cInvalid item ID!'
+  lock:
+    usage: '&cUsage: /alex lock <player> <item-id>'
+    success: '&aRe-locked item &6{item} &afor &6{player} &a(unlock progress reset)!'
+    invalid-item: '&cInvalid item ID!'
   set:
     usage: '&cUsage: /alex set <player> <amount>'
     success: '&aSet &6{player}&a''s EMC to: &6{amount}'
@@ -48,6 +52,8 @@ help:
   give: '&a/alex give <player> <amount> &7- Give EMC to a player'
   set: '&a/alex set <player> <amount> &7- Set a player''s EMC'
   unlockall: '&a/alex unlockall <player> &7- Unlock all items for a player'
+  unlock: '&a/alex unlock <player> <item-id> &7- Unlock one item for a player'
+  lock: '&a/alex lock <player> <item-id> &7- Re-lock a player item (resets progress)'
   footer: '&6===================='
 menu:
   sell:

@@ -53,13 +53,14 @@ public final class CeItemUtil {
     /** 获取 CE 物品的原始显示名（用于搜索匹配），失败返回 null */
     public static String getCeDisplayName(String ceId) {
         if (ceId == null) return null;
-        if (CE_NAME_CACHE.containsKey(ceId)) return CE_NAME_CACHE.get(ceId);
+        String cached = CE_NAME_CACHE.get(ceId);
+        if (cached != null) return cached.isEmpty() ? null : cached;
         String name = null;
         ItemStack item = buildCeItem(ceId);
         if (item != null && item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
             name = item.getItemMeta().getDisplayName();
         }
-        CE_NAME_CACHE.put(ceId, name);
+        CE_NAME_CACHE.put(ceId, name == null ? "" : name);
         return name;
     }
 

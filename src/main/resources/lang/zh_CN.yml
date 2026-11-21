@@ -29,6 +29,10 @@ command:
     usage: '&c用法: /alex unlock <玩家> <物品ID>'
     success: '&a已为 &6{player} &a解锁物品: &6{item} &a！'
     invalid-item: '&c无效的物品ID！'
+  lock:
+    usage: '&c用法: /alex lock <玩家> <物品ID>'
+    success: '&a已重新锁定 &6{player} &a的物品: &6{item} &a（该物品解锁进度已重置）！'
+    invalid-item: '&c无效的物品ID！'
   set:
     usage: '&c用法: /alex set <玩家> <金额>'
     success: '&a已将 &6{player} &a的EMC设置为: &6{amount}'
@@ -46,6 +50,8 @@ help:
   give: '&a/alex give <玩家> <金额> &7- 给玩家增加EMC'
   set: '&a/alex set <玩家> <金额> &7- 设置玩家的EMC值'
   unlockall: '&a/alex unlockall <玩家> &7- 解锁玩家的所有物品'
+  unlock: '&a/alex unlock <玩家> <物品ID> &7- 解锁玩家的单个物品'
+  lock: '&a/alex lock <玩家> <物品ID> &7- 重新锁定玩家的物品（重置进度）'
   footer: '&6===================='
 menu:
   sell:

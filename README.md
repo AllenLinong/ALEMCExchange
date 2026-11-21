@@ -44,6 +44,7 @@
 | `/alex set <玩家> <金额>` | 设置 EMC | `alembcexchange.admin` |
 | `/alex unlockall <玩家>` | 解锁全部物品 | `alembcexchange.admin` |
 | `/alex unlock <玩家> <ID>` | 解锁单个物品 | `alembcexchange.admin` |
+| `/alex lock <玩家> <ID>` | 重新锁定单个物品（重置进度） | `alembcexchange.admin` |
 
 ## 权限
 

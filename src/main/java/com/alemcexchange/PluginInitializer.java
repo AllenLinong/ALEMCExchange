@@ -8,6 +8,7 @@ import com.alemcexchange.listener.PlayerPickupItemListener;
 import com.alemcexchange.placeholder.ALEMCExchangeExpansion;
 import com.alemcexchange.sync.SyncManager;
 import com.alemcexchange.util.MenuManager;
+import com.alemcexchange.util.SaleDelivery;
 import com.alemcexchange.util.SchedulerUtil;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -32,7 +33,8 @@ public class PluginInitializer {
 
         schedulerUtil = new SchedulerUtil(plugin);
 
-        MenuManager menuManager = new MenuManager(plugin, configManager, databaseManager);
+        SaleDelivery saleDelivery = new SaleDelivery(plugin, schedulerUtil);
+        MenuManager menuManager = new MenuManager(plugin, configManager, databaseManager, saleDelivery);
 
         // 跨服实时同步（MySQL + sync.enabled 时生效）
         syncManager = new SyncManager(plugin, configManager, databaseManager, menuManager, schedulerUtil);
@@ -40,7 +42,7 @@ public class PluginInitializer {
         syncManager.start();
 
         BlockBreakListener blockBreakListener = new BlockBreakListener(plugin, configManager, databaseManager);
-        PlayerPickupItemListener playerPickupItemListener = new PlayerPickupItemListener(plugin, configManager, databaseManager);
+        PlayerPickupItemListener playerPickupItemListener = new PlayerPickupItemListener(plugin, configManager, databaseManager, saleDelivery);
 
         blockBreakListener.setMenuManager(menuManager);
         playerPickupItemListener.setMenuManager(menuManager);

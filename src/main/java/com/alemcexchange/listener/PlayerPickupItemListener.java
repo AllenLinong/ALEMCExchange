@@ -3,9 +3,10 @@ package com.alemcexchange.listener;
 import com.alemcexchange.config.ConfigManager;
 import com.alemcexchange.database.DatabaseManager;
 import com.alemcexchange.util.ColorUtil;
+import com.alemcexchange.util.MenuManager;
+import com.alemcexchange.util.SaleDelivery;
 import com.alemcexchange.util.SchedulerUtil;
 import org.bukkit.Material;
-import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -16,7 +17,12 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerPickupItemListener implements Listener {
@@ -27,366 +33,227 @@ public class PlayerPickupItemListener implements Listener {
     private final ConfigManager configManager;
     private final DatabaseManager databaseManager;
     private final SchedulerUtil schedulerUtil;
-    private com.alemcexchange.util.MenuManager menuManager;
-    private final ConcurrentHashMap<String, Boolean> autoSellCache = new ConcurrentHashMap<>();
-    // 值 = long[]{数量, 最后拾取时间戳}
-    private final ConcurrentHashMap<Player, ConcurrentHashMap<Material, long[]>> pickupCounters = new ConcurrentHashMap<>();
+    private MenuManager menuManager;
+    private final SaleDelivery saleDelivery;
+    private final Map<Player, ConcurrentHashMap<Material, PickupCount>> pickupCounters = new ConcurrentHashMap<>();
+    private final Set<UUID> settling = ConcurrentHashMap.newKeySet();
     private static final long IDLE_FLUSH_MILLIS = 5000L;
 
-    public PlayerPickupItemListener(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager) {
+    public PlayerPickupItemListener(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager,
+                                    SaleDelivery saleDelivery) {
         this.plugin = plugin;
         this.configManager = configManager;
         this.databaseManager = databaseManager;
+        this.saleDelivery = saleDelivery;
         this.schedulerUtil = new SchedulerUtil(plugin);
-        startIdleFlushTask();
+        schedulerUtil.runTimerAsync(this::flushPickupBatches, 10L, 10L);
     }
 
-    public void setMenuManager(com.alemcexchange.util.MenuManager menuManager) {
+    public void setMenuManager(MenuManager menuManager) {
         this.menuManager = menuManager;
     }
 
-    @EventHandler(priority = EventPriority.LOW)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityPickupItem(EntityPickupItemEvent event) {
-        if (event.isCancelled()) {
-            return;
-        }
+        if (!(event.getEntity() instanceof Player player) || !configManager.isAutoSellEnabled()
+                || !player.hasPermission("alemcexchange.autosell")) return;
+        ItemStack item = event.getItem().getItemStack();
+        Material material = item.getType();
+        if (!configManager.hasItem(material.name()) || !item.isSimilar(new ItemStack(material))) return;
+        long now = System.currentTimeMillis();
+        int amount = item.getAmount();
+        pickupCounters.computeIfAbsent(player, key -> new ConcurrentHashMap<>())
+                .compute(material, (key, previous) -> new PickupCount(
+                        previous == null ? amount : (int) Math.min(Integer.MAX_VALUE, (long) previous.amount() + amount), now));
+    }
 
-        if (!(event.getEntity() instanceof Player player)) {
-            return;
-        }
-
-        Item itemEntity = event.getItem();
-        Material material = itemEntity.getItemStack().getType();
-        String materialName = material.name();
-        int amount = itemEntity.getItemStack().getAmount();
-
-        if (!configManager.isAutoSellEnabled()) {
-            return;
-        }
-
-        if (!player.hasPermission("alemcexchange.autosell")) {
-            return;
-        }
-
-        if (!configManager.hasItem(materialName)) {
-            return;
-        }
-
-        schedulerUtil.runTaskLater(() -> {
-            if (!player.isOnline()) {
-                return;
-            }
-
-            ItemStack itemInInventory = new ItemStack(material, amount);
-            if (!player.getInventory().containsAtLeast(itemInInventory, amount)) {
-                return;
-            }
-
-            schedulerUtil.runAsync(() -> {
-                try {
-                    if (!isAutoSellEnabled(player)) {
-                        return;
-                    }
-
-                    int batchThreshold = configManager.getConfig().getInt("autosell.batch_threshold", 64);
-                    ConcurrentHashMap<Material, long[]> playerCounters = pickupCounters.computeIfAbsent(player, k -> new ConcurrentHashMap<>());
-                    long[] counter = playerCounters.compute(material, (k, v) ->
-                            v == null ? new long[]{amount, System.currentTimeMillis()}
-                                    : new long[]{v[0] + amount, System.currentTimeMillis()});
-                    long newCount = counter[0];
-
-                    if (newCount >= batchThreshold) {
-                        if (databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
-                            processAutoSell(player, material, (int) Math.min(newCount, Integer.MAX_VALUE));
-                            playerCounters.remove(material);
-                        }
-                        // 未解锁：保留计数，解锁后由闲置结算或下一批触发
-                    }
-                } catch (SQLException | ClassNotFoundException e) {
-                    plugin.getLogger().severe("Error handling auto sell: " + e.getMessage());
-                }
+    private void flushPickupBatches() {
+        long now = System.currentTimeMillis();
+        int threshold = Math.max(1, configManager.getConfig().getInt("autosell.batch_threshold", 64));
+        pickupCounters.forEach((player, counts) -> {
+            UUID uuid = player.getUniqueId();
+            Map<Material, PickupCount> ready = new LinkedHashMap<>();
+            counts.forEach((material, count) -> {
+                if (count.amount() >= threshold || now - count.lastPickup() >= IDLE_FLUSH_MILLIS) ready.put(material, count);
             });
-        }, 2L);
-    }
-
-    private void processAutoSell(Player player, Material material, int amount) {
-        String materialName = material.name();
-
-        schedulerUtil.runTask(() -> {
-            if (!player.isOnline()) {
-                return;
-            }
-
-            int removed = removeItemsFromInventory(player, material, amount);
-            if (removed == 0) {
-                plugin.getLogger().warning("Could not remove any items for auto sell");
-                return;
-            }
-
-            final int finalRemoved = removed;
-            schedulerUtil.runAsync(() -> processAutoSellDatabase(player, material, materialName, finalRemoved));
-        });
-    }
-
-    private void processAutoSellDatabase(Player player, Material material, String materialName, int removed) {
-        double dailyConsumed = 0;
-        String effectiveDate = null;
-        boolean balanceCredited = false;
-
-        try {
-            double emcPerItem = configManager.getItemEMC(materialName);
-            if (emcPerItem <= 0) {
-                plugin.getLogger().warning("Invalid EMC price for " + materialName + ": " + emcPerItem);
-                returnItemsToPlayer(player, material, removed);
-                return;
-            }
-
-            double requestedEMC = emcPerItem * removed;
-            double allowedEMC = requestedEMC;
-            int actualSold = removed;
-            boolean limited = false;
-            double dailyLimitForMessage = -1;
-            double remainingAfterSell = Double.MAX_VALUE;
-
-            if (configManager.isDailyLimitEnabled()) {
-                double dailyLimit = configManager.getDailyLimitForPlayer(player);
-                dailyLimitForMessage = dailyLimit;
-                if (dailyLimit != -1) {
-                    effectiveDate = databaseManager.getEffectiveDate();
-                    allowedEMC = databaseManager.consumeDailyEMCLimit(player.getUniqueId(), effectiveDate, requestedEMC, dailyLimit);
-                    dailyConsumed = allowedEMC;
-
-                    if (allowedEMC <= DAILY_LIMIT_EPSILON) {
-                        returnItemsToPlayer(player, material, removed);
-                        disableAutoSellForDailyLimit(player);
-                        return;
-                    }
-
-                    actualSold = Math.min(removed, (int) (allowedEMC / emcPerItem));
-                    double actualEMC = actualSold * emcPerItem;
-                    double unusedDaily = allowedEMC - actualEMC;
-                    if (unusedDaily > DAILY_LIMIT_EPSILON) {
-                        databaseManager.addDailyEMCEarned(player.getUniqueId(), effectiveDate, -unusedDaily);
-                        dailyConsumed -= unusedDaily;
-                    }
-
-                    allowedEMC = actualEMC;
-                    limited = actualSold < removed;
-                    remainingAfterSell = Math.max(0, dailyLimit - databaseManager.getDailyEMCEarned(player.getUniqueId(), effectiveDate));
-                }
-            }
-
-            if (actualSold <= 0 || allowedEMC <= DAILY_LIMIT_EPSILON) {
-                refundDailyLimit(player, effectiveDate, dailyConsumed);
-                returnItemsToPlayer(player, material, removed);
-                disableAutoSellForDailyLimit(player);
-                return;
-            }
-
-            double taxRate = configManager.getTaxRateForPlayer(player);
-            double tax = allowedEMC * taxRate;
-            double netEMC = allowedEMC - tax;
-
-            databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
-            balanceCredited = true;
-            if (menuManager != null) {
-                menuManager.clearPlayerCache(player.getUniqueId());
-            }
-
+            if (ready.isEmpty() || !settling.add(uuid)) return;
+            boolean handedOff = false;
             try {
-                databaseManager.addSellProgress(player.getUniqueId(), materialName, actualSold);
-                checkUnlock(player, materialName);
-            } catch (SQLException | ClassNotFoundException e) {
-                plugin.getLogger().severe("Error updating auto sell progress: " + e.getMessage());
-            }
-
-            autoSellCache.remove(player.getUniqueId().toString());
-
-            int unsoldAmount = removed - actualSold;
-            boolean shouldDisableAfterSell = remainingAfterSell <= DAILY_LIMIT_EPSILON;
-            sendAutoSellResult(player, material, unsoldAmount, netEMC, limited, dailyLimitForMessage, remainingAfterSell);
-
-            if (shouldDisableAfterSell) {
-                disableAutoSellForDailyLimit(player);
-            }
-        } catch (SQLException | ClassNotFoundException e) {
-            plugin.getLogger().severe("Error processing auto sell: " + e.getMessage());
-            if (!balanceCredited) {
-                refundDailyLimit(player, effectiveDate, dailyConsumed);
-                returnItemsToPlayer(player, material, removed);
-            }
-        }
-    }
-
-    private void sendAutoSellResult(Player player, Material material, int unsoldAmount, double netEMC, boolean limited, double dailyLimit, double remainingAfterSell) {
-        schedulerUtil.runTask(() -> {
-            returnItemsToPlayerSync(player, material, unsoldAmount);
-
-            if (!configManager.isAutoSellMessageEnabled()) {
-                return;
-            }
-
-            String message = configManager.getLang().getString("prefix") +
-                    configManager.getLang().getString("autosell.sold").replace("{amount}", String.format("%.2f", netEMC));
-            player.sendMessage(ColorUtil.translateColorCodes(message));
-
-            if (limited && dailyLimit != -1) {
-                String limitMsg = configManager.getLang().getString("prefix") +
-                        configManager.getLang().getString("daily_limit.remaining")
-                                .replace("{remaining}", String.format("%.2f", Math.max(0, remainingAfterSell)))
-                                .replace("{limit}", String.format("%.2f", dailyLimit));
-                player.sendMessage(ColorUtil.translateColorCodes(limitMsg));
+                if (!configManager.isAutoSellEnabled() || !databaseManager.isAutoSellEnabled(uuid)) {
+                    ready.forEach(counts::remove);
+                    return;
+                }
+                Map<String, Boolean> unlocked = databaseManager.getUnlockedStatuses(uuid, ready.keySet().stream().map(Material::name).toList());
+                Map<Material, Integer> batch = new LinkedHashMap<>();
+                ready.forEach((material, count) -> {
+                    if (unlocked.getOrDefault(material.name(), false)) {
+                        counts.computeIfPresent(material, (key, latest) -> {
+                            batch.put(key, latest.amount());
+                            return null;
+                        });
+                    } else if (now - count.lastPickup() >= IDLE_FLUSH_MILLIS) {
+                        counts.remove(material, count);
+                    }
+                });
+                if (batch.isEmpty()) return;
+                handedOff = schedulerUtil.runAtEntity(player, () -> removeBatch(player, uuid, batch), () -> settling.remove(uuid));
+            } catch (SQLException | ClassNotFoundException | RuntimeException exception) {
+                plugin.getLogger().log(java.util.logging.Level.WARNING, "Could not prepare auto sell batch", exception);
+            } finally {
+                if (!handedOff) settling.remove(uuid);
             }
         });
     }
 
-    private void returnItemsToPlayer(Player player, Material material, int amount) {
-        if (amount <= 0) {
-            return;
-        }
-        schedulerUtil.runTask(() -> returnItemsToPlayerSync(player, material, amount));
-    }
-
-    private void returnItemsToPlayerSync(Player player, Material material, int amount) {
-        if (amount <= 0) {
-            return;
-        }
-        ItemStack returnItem = new ItemStack(material, amount);
-        Map<Integer, ItemStack> leftover = player.getInventory().addItem(returnItem);
-        for (ItemStack leftoverItem : leftover.values()) {
-            player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem);
-        }
-    }
-
-    private void refundDailyLimit(Player player, String effectiveDate, double amount) {
-        if (effectiveDate == null || amount <= DAILY_LIMIT_EPSILON) {
-            return;
-        }
+    private void removeBatch(Player player, UUID uuid, Map<Material, Integer> batch) {
+        Map<Material, Integer> removed = new LinkedHashMap<>();
+        boolean handedOff = false;
         try {
-            databaseManager.addDailyEMCEarned(player.getUniqueId(), effectiveDate, -amount);
-        } catch (SQLException | ClassNotFoundException e) {
-            plugin.getLogger().severe("Error refunding daily EMC limit: " + e.getMessage());
-        }
-    }
-
-    private int removeItemsFromInventory(Player player, Material material, int amount) {
-        int removed = 0;
-        ItemStack[] inventory = player.getInventory().getContents();
-
-        for (int i = 0; i < 36 && removed < amount; i++) {
-            ItemStack item = inventory[i];
-            if (item != null && item.getType() == material) {
-                int itemAmount = item.getAmount();
-                int toRemove = Math.min(itemAmount, amount - removed);
-
-                if (itemAmount == toRemove) {
-                    player.getInventory().setItem(i, null);
-                } else {
-                    item.setAmount(itemAmount - toRemove);
-                    player.getInventory().setItem(i, item);
+            if (!player.isOnline() || !pickupCounters.containsKey(player) || !configManager.isAutoSellEnabled()
+                    || !player.hasPermission("alemcexchange.autosell")) return;
+            double taxRate = configManager.getTaxRateForPlayer(player);
+            double dailyLimit = configManager.isDailyLimitEnabled() ? configManager.getDailyLimitForPlayer(player) : -1;
+            ItemStack[] contents = player.getInventory().getStorageContents();
+            for (int slot = 0; slot < contents.length; slot++) {
+                ItemStack item = contents[slot];
+                if (item == null) continue;
+                Material material = item.getType();
+                int remaining = batch.getOrDefault(material, 0);
+                if (remaining <= 0 || !item.isSimilar(new ItemStack(material))) continue;
+                int take = Math.min(remaining, item.getAmount());
+                int left = item.getAmount() - take;
+                if (left == 0) player.getInventory().setItem(slot, null);
+                else {
+                    item.setAmount(left);
+                    player.getInventory().setItem(slot, item);
                 }
-
-                removed += toRemove;
+                removed.merge(material, take, Integer::sum);
+                batch.put(material, remaining - take);
+            }
+            if (removed.isEmpty()) return;
+            handedOff = schedulerUtil.runAsync(() -> settleBatch(uuid, removed, taxRate, dailyLimit));
+        } catch (RuntimeException exception) {
+            plugin.getLogger().log(java.util.logging.Level.WARNING, "Could not schedule auto sell batch", exception);
+        } finally {
+            if (!handedOff) {
+                settling.remove(uuid);
+                if (!removed.isEmpty()) saleDelivery.deliver(uuid, () -> toStacks(removed), current -> {}, () -> {});
             }
         }
+    }
 
-        return removed;
+    private void settleBatch(UUID uuid, Map<Material, Integer> removed, double taxRate, double dailyLimit) {
+        Map<Material, Integer> sold = new LinkedHashMap<>();
+        double consumed = 0;
+        double net = 0;
+        double remainingAfterSell = -1;
+        boolean credited = false;
+        boolean limited = false;
+        boolean disabled = false;
+        String date = null;
+        try {
+            if (!databaseManager.isAutoSellEnabled(uuid)) return;
+            Map<Material, Double> prices = new LinkedHashMap<>();
+            double requested = 0;
+            for (var entry : removed.entrySet()) {
+                double price = configManager.getItemEMC(entry.getKey().name());
+                double value = price * entry.getValue();
+                if (value <= 0 || !Double.isFinite(requested + value)) continue;
+                prices.put(entry.getKey(), price);
+                requested += value;
+            }
+            if (requested <= 0) return;
+            double available = requested;
+            if (dailyLimit >= 0) {
+                date = databaseManager.getEffectiveDate();
+                consumed = databaseManager.consumeDailyEMCLimit(uuid, date, requested, dailyLimit);
+                available = consumed;
+            }
+            double gross = 0;
+            for (var entry : prices.entrySet()) {
+                Material material = entry.getKey();
+                double price = entry.getValue();
+                int amount = removed.get(material);
+                int count = available >= requested || amount * price <= available - gross
+                        ? amount : Math.max(0, (int) ((available - gross) / price));
+                if (count <= 0) continue;
+                sold.put(material, count);
+                gross += count * price;
+            }
+            if (date != null && consumed > gross) {
+                databaseManager.addDailyEMCEarned(uuid, date, gross - consumed);
+                consumed = gross;
+            }
+            limited = gross < requested;
+            if (gross > 0) {
+                net = gross - gross * taxRate;
+                databaseManager.addEMCBalance(uuid, net);
+                credited = true;
+                if (menuManager != null) menuManager.clearPlayerCache(uuid);
+            }
+            if (date != null) {
+                remainingAfterSell = Math.max(0, dailyLimit - databaseManager.getDailyEMCEarned(uuid, date));
+                if (gross <= 0 || remainingAfterSell <= DAILY_LIMIT_EPSILON) {
+                    databaseManager.setAutoSellEnabled(uuid, false);
+                    disabled = true;
+                }
+            }
+        } catch (SQLException | ClassNotFoundException | RuntimeException exception) {
+            if (!credited && date != null && consumed > 0) {
+                try {
+                    databaseManager.addDailyEMCEarned(uuid, date, -consumed);
+                } catch (SQLException | ClassNotFoundException refundException) {
+                    exception.addSuppressed(refundException);
+                }
+            }
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Could not settle auto sell batch", exception);
+        } finally {
+            if (credited) sold.forEach((material, count) -> removed.computeIfPresent(material, (key, amount) -> amount - count));
+            sendResult(uuid, removed, credited, net, limited, dailyLimit, remainingAfterSell, disabled);
+        }
+    }
+
+    private void sendResult(UUID uuid, Map<Material, Integer> returned, boolean credited, double net, boolean limited,
+                            double dailyLimit, double remaining, boolean disabled) {
+        saleDelivery.deliver(uuid, () -> toStacks(returned), player -> {
+            String prefix = configManager.getLang().getString("prefix", "");
+            if (credited && configManager.isAutoSellMessageEnabled()) {
+                String message = configManager.getLang().getString("autosell.sold", "").replace("{amount}", String.format("%.2f", net));
+                player.sendMessage(ColorUtil.translateColorCodes(prefix + message));
+                if (limited && remaining >= 0) {
+                    String limit = configManager.getLang().getString("daily_limit.remaining", "")
+                            .replace("{remaining}", String.format("%.2f", remaining))
+                            .replace("{limit}", String.format("%.2f", dailyLimit));
+                    player.sendMessage(ColorUtil.translateColorCodes(prefix + limit));
+                }
+            }
+            if (disabled) {
+                String message = configManager.getLang().getString("autosell.disabled_daily_limit", "");
+                player.sendMessage(ColorUtil.translateColorCodes(prefix + message));
+            }
+        }, () -> settling.remove(uuid));
+    }
+
+    private List<ItemStack> toStacks(Map<Material, Integer> amounts) {
+        List<ItemStack> items = new ArrayList<>();
+        amounts.forEach((material, amount) -> {
+            while (amount > 0) {
+                int stackSize = Math.min(amount, material.getMaxStackSize());
+                items.add(new ItemStack(material, stackSize));
+                amount -= stackSize;
+            }
+        });
+        return items;
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        Player player = event.getPlayer();
+        clearPickupCounts(event.getPlayer());
+    }
+
+    public void clearPickupCounts(Player player) {
         pickupCounters.remove(player);
-        autoSellCache.remove(player.getUniqueId().toString());
     }
 
-    /**
-     * 闲置尾数结算：计数停止增长 5 秒后，即使不足批量阈值也结算一次，
-     * 避免"挖了 30 个就收工，永远不触发自动出售"的问题。
-     */
-    private void startIdleFlushTask() {
-        schedulerUtil.runTimerAsync(() -> {
-            long now = System.currentTimeMillis();
-            for (ConcurrentHashMap.Entry<Player, ConcurrentHashMap<Material, long[]>> playerEntry : pickupCounters.entrySet()) {
-                Player player = playerEntry.getKey();
-                if (!player.isOnline()) {
-                    pickupCounters.remove(player);
-                    continue;
-                }
-                ConcurrentHashMap<Material, long[]> counters = playerEntry.getValue();
-                for (ConcurrentHashMap.Entry<Material, long[]> entry : counters.entrySet()) {
-                    long[] counter = entry.getValue();
-                    if (counter[0] <= 0 || now - counter[1] < IDLE_FLUSH_MILLIS) continue;
-                    Material material = entry.getKey();
-                    try {
-                        if (isAutoSellEnabled(player) && databaseManager.isUnlocked(player.getUniqueId(), material.name())) {
-                            processAutoSell(player, material, (int) Math.min(counter[0], Integer.MAX_VALUE));
-                        }
-                        counters.remove(material);
-                    } catch (SQLException | ClassNotFoundException e) {
-                        plugin.getLogger().warning("Idle autosell flush error: " + e.getMessage());
-                    }
-                }
-            }
-        }, 20L, 20L);
-    }
-
-    private boolean isAutoSellEnabled(Player player) {
-        String playerUUID = player.getUniqueId().toString();
-        return autoSellCache.computeIfAbsent(playerUUID, uuid -> {
-            try {
-                return databaseManager.isAutoSellEnabled(player.getUniqueId());
-            } catch (SQLException | ClassNotFoundException e) {
-                plugin.getLogger().severe("Error checking auto sell status: " + e.getMessage());
-                return false;
-            }
-        });
-    }
-
-    public void refreshAutoSellCache() {
-        autoSellCache.clear();
-    }
-
-    private void disableAutoSellForDailyLimit(Player player) {
-        try {
-            databaseManager.setAutoSellEnabled(player.getUniqueId(), false);
-            autoSellCache.put(player.getUniqueId().toString(), false);
-            pickupCounters.remove(player);
-
-            if (player.isOnline()) {
-                schedulerUtil.runTask(() -> {
-                    String message = configManager.getLang().getString("prefix") +
-                            configManager.getLang().getString(
-                                    "autosell.disabled_daily_limit",
-                                    "&c今日EMC获取额度已用完，自动出售已关闭！");
-                    player.sendMessage(ColorUtil.translateColorCodes(message));
-                });
-            }
-        } catch (SQLException | ClassNotFoundException e) {
-            plugin.getLogger().severe("Error disabling auto sell after reaching daily limit: " + e.getMessage());
-        }
-    }
-
-    private void checkUnlock(Player player, String materialName) throws SQLException, ClassNotFoundException {
-        int requiredMine = configManager.getRequiredMine(materialName);
-        int requiredSell = configManager.getRequiredSell(materialName);
-
-        int mineProgress = databaseManager.getMineProgress(player.getUniqueId(), materialName);
-        int sellProgress = databaseManager.getSellProgress(player.getUniqueId(), materialName);
-
-        boolean mineCondition = requiredMine == 0 || mineProgress >= requiredMine;
-        boolean sellCondition = requiredSell == 0 || sellProgress >= requiredSell;
-
-        if (mineCondition && sellCondition && !databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
-            databaseManager.unlockItem(player.getUniqueId(), materialName);
-            if (menuManager != null) {
-                menuManager.clearPlayerCache(player.getUniqueId());
-            }
-
-            String itemDisplayName = configManager.getItemName(materialName);
-            final String message = configManager.getLang().getString("prefix") +
-                    configManager.getLang().getString("mine.unlocked").replace("{item}", itemDisplayName);
-            schedulerUtil.runTask(() -> player.sendMessage(ColorUtil.translateColorCodes(message)));
-        }
-    }
+    private record PickupCount(int amount, long lastPickup) {}
 }

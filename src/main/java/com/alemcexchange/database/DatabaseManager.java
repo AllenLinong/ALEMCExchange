@@ -19,6 +19,13 @@ public class DatabaseManager {
     private String sqliteFile = "alembc.db";
     private volatile boolean dailyEMCTableReady = false;
 
+    // ── SQLite 并发写保护 ──
+    // SQLite 模式下全部线程共用一条长连接：transferEMC/consumeDailyEMCLimit 会临时
+    // 关闭自动提交开启事务，期间其他线程的写入会加入该事务并在回滚时被一并丢弃
+    // （表现为"解锁成功但第二天又要重新解锁"）。因此所有 SQLite 写分支与这两个
+    // 事务方法（已是 synchronized，锁对象即本实例）必须互斥；MySQL 走连接池，
+    // 每次操作独立连接，事务天然隔离，无需加锁。
+
     public DatabaseManager(JavaPlugin plugin, ConfigManager configManager) {
         this.plugin = plugin;
         this.configManager = configManager;
@@ -228,7 +235,12 @@ public class DatabaseManager {
         plugin.getLogger().info("Database tables created successfully!");
     }
 
-    private synchronized void ensureDailyEMCTableExists() throws SQLException, ClassNotFoundException {
+    private void ensureDailyEMCTableExists() throws SQLException, ClassNotFoundException {
+        if (dailyEMCTableReady) return;
+        initializeDailyEMCTable();
+    }
+
+    private synchronized void initializeDailyEMCTable() throws SQLException, ClassNotFoundException {
         if (dailyEMCTableReady) {
             return;
         }
@@ -284,50 +296,65 @@ public class DatabaseManager {
         String insertPlayer = "INSERT INTO " + tablePrefix + "players (uuid, emc_balance, autosell_enabled) VALUES (?, 0, 0)";
 
         if (isMySQL) {
-            // MySQL 连接，使用 try-with-resources 确保连接归还到连接池
             try (Connection conn = getConnection();
-                 PreparedStatement checkStmt = conn.prepareStatement(checkPlayer)) {
-                checkStmt.setString(1, uuid.toString());
-                try (ResultSet rs = checkStmt.executeQuery()) {
-                    if (!rs.next()) {
-                        try (PreparedStatement insertStmt = conn.prepareStatement(insertPlayer)) {
-                            insertStmt.setString(1, uuid.toString());
-                            insertStmt.executeUpdate();
-                        }
-                    }
-                }
+                 PreparedStatement stmt = conn.prepareStatement(insertPlayer + " ON DUPLICATE KEY UPDATE uuid = uuid")) {
+                stmt.setString(1, uuid.toString());
+                stmt.executeUpdate();
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement checkStmt = conn.prepareStatement(checkPlayer);
-            try {
-                checkStmt.setString(1, uuid.toString());
-                ResultSet rs = checkStmt.executeQuery();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement checkStmt = conn.prepareStatement(checkPlayer);
                 try {
-                    if (!rs.next()) {
-                        PreparedStatement insertStmt = conn.prepareStatement(insertPlayer);
-                        try {
-                            insertStmt.setString(1, uuid.toString());
-                            insertStmt.executeUpdate();
-                        } finally {
-                            if (insertStmt != null) {
-                                insertStmt.close();
+                    checkStmt.setString(1, uuid.toString());
+                    ResultSet rs = checkStmt.executeQuery();
+                    try {
+                        if (!rs.next()) {
+                            PreparedStatement insertStmt = conn.prepareStatement(insertPlayer);
+                            try {
+                                insertStmt.setString(1, uuid.toString());
+                                insertStmt.executeUpdate();
+                            } finally {
+                                if (insertStmt != null) {
+                                    insertStmt.close();
+                                }
                             }
+                        }
+                    } finally {
+                        if (rs != null) {
+                            rs.close();
                         }
                     }
                 } finally {
-                    if (rs != null) {
-                        rs.close();
+                    if (checkStmt != null) {
+                        checkStmt.close();
                     }
-                }
-            } finally {
-                if (checkStmt != null) {
-                    checkStmt.close();
                 }
             }
         }
         knownPlayers.add(uuid);
+    }
+
+    public record PlayerDisplayData(double balance, boolean autoSell, double earned) {}
+
+    public PlayerDisplayData getPlayerDisplayData(UUID uuid, String date) throws SQLException, ClassNotFoundException {
+        if (date != null) ensureDailyEMCTableExists();
+        String query = "SELECT p.emc_balance, p.autosell_enabled, "
+                + (date == null ? "0 FROM " + tablePrefix + "players p"
+                : "COALESCE(d.emc_earned, 0) FROM " + tablePrefix + "players p LEFT JOIN " + tablePrefix
+                        + "player_daily_emc d ON d.uuid = p.uuid AND d.date = ?") + " WHERE p.uuid = ?";
+        Connection conn = getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            if (date != null) stmt.setString(1, date);
+            stmt.setString(date == null ? 1 : 2, uuid.toString());
+            try (ResultSet result = stmt.executeQuery()) {
+                return result.next() ? new PlayerDisplayData(result.getDouble(1), result.getBoolean(2), result.getDouble(3))
+                        : new PlayerDisplayData(0, false, 0);
+            }
+        } finally {
+            if (isMySQL) conn.close();
+        }
     }
 
     public double getEMCBalance(UUID uuid) throws SQLException, ClassNotFoundException {
@@ -386,16 +413,18 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            try {
-                stmt.setDouble(1, balance);
-                stmt.setString(2, uuid.toString());
-                stmt.executeUpdate();
-            } finally {
-                if (stmt != null) {
-                    stmt.close();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement stmt = conn.prepareStatement(query);
+                try {
+                    stmt.setDouble(1, balance);
+                    stmt.setString(2, uuid.toString());
+                    stmt.executeUpdate();
+                } finally {
+                    if (stmt != null) {
+                        stmt.close();
+                    }
                 }
             }
         }
@@ -415,16 +444,18 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            try {
-                stmt.setDouble(1, amount);
-                stmt.setString(2, uuid.toString());
-                stmt.executeUpdate();
-            } finally {
-                if (stmt != null) {
-                    stmt.close();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement stmt = conn.prepareStatement(query);
+                try {
+                    stmt.setDouble(1, amount);
+                    stmt.setString(2, uuid.toString());
+                    stmt.executeUpdate();
+                } finally {
+                    if (stmt != null) {
+                        stmt.close();
+                    }
                 }
             }
         }
@@ -451,18 +482,21 @@ public class DatabaseManager {
                 return ok;
             }
         } else {
-            Connection conn = getConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            try {
-                stmt.setDouble(1, amount);
-                stmt.setString(2, uuid.toString());
-                stmt.setDouble(3, amount);
-                boolean ok = stmt.executeUpdate() > 0;
-                if (ok) publishSync(uuid);
-                return ok;
-            } finally {
-                if (stmt != null) {
-                    stmt.close();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement stmt = conn.prepareStatement(query);
+                try {
+                    stmt.setDouble(1, amount);
+                    stmt.setString(2, uuid.toString());
+                    stmt.setDouble(3, amount);
+                    boolean ok = stmt.executeUpdate() > 0;
+                    if (ok) publishSync(uuid);
+                    return ok;
+                } finally {
+                    if (stmt != null) {
+                        stmt.close();
+                    }
                 }
             }
         }
@@ -603,52 +637,54 @@ public class DatabaseManager {
                 }
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement checkStmt = conn.prepareStatement(checkQuery);
-            try {
-                checkStmt.setString(1, uuid.toString());
-                checkStmt.setString(2, material);
-                ResultSet rs = checkStmt.executeQuery();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement checkStmt = conn.prepareStatement(checkQuery);
                 try {
-                    if (rs.next()) {
-                        PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
-                        try {
-                            updateStmt.setInt(1, progress);
-                            updateStmt.setString(2, uuid.toString());
-                            updateStmt.setString(3, material);
-                            updateStmt.executeUpdate();
-                        } finally {
-                            if (updateStmt != null) {
-                                updateStmt.close();
+                    checkStmt.setString(1, uuid.toString());
+                    checkStmt.setString(2, material);
+                    ResultSet rs = checkStmt.executeQuery();
+                    try {
+                        if (rs.next()) {
+                            PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
+                            try {
+                                updateStmt.setInt(1, progress);
+                                updateStmt.setString(2, uuid.toString());
+                                updateStmt.setString(3, material);
+                                updateStmt.executeUpdate();
+                            } finally {
+                                if (updateStmt != null) {
+                                    updateStmt.close();
+                                }
+                            }
+                        } else {
+                            PreparedStatement insertStmt = conn.prepareStatement(insertQuery);
+                            try {
+                                insertStmt.setString(1, uuid.toString());
+                                insertStmt.setString(2, material);
+                                insertStmt.setInt(3, progress);
+                                insertStmt.executeUpdate();
+                            } finally {
+                                if (insertStmt != null) {
+                                    insertStmt.close();
+                                }
                             }
                         }
-                    } else {
-                        PreparedStatement insertStmt = conn.prepareStatement(insertQuery);
-                        try {
-                            insertStmt.setString(1, uuid.toString());
-                            insertStmt.setString(2, material);
-                            insertStmt.setInt(3, progress);
-                            insertStmt.executeUpdate();
-                        } finally {
-                            if (insertStmt != null) {
-                                insertStmt.close();
-                            }
+                    } finally {
+                        if (rs != null) {
+                            rs.close();
                         }
                     }
                 } finally {
-                    if (rs != null) {
-                        rs.close();
+                    if (checkStmt != null) {
+                        checkStmt.close();
                     }
-                }
-            } finally {
-                if (checkStmt != null) {
-                    checkStmt.close();
                 }
             }
         }
             publishSync(uuid);
-}
+    }
 
     public void addMineProgress(UUID uuid, String material, int amount) throws SQLException, ClassNotFoundException {
         // 如果物品已解锁，不再记录进度
@@ -674,23 +710,25 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            try {
-                stmt.setString(1, uuid.toString());
-                stmt.setString(2, material);
-                stmt.setInt(3, amount);
-                stmt.setInt(4, amount);
-                stmt.executeUpdate();
-            } finally {
-                if (stmt != null) {
-                    stmt.close();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement stmt = conn.prepareStatement(query);
+                try {
+                    stmt.setString(1, uuid.toString());
+                    stmt.setString(2, material);
+                    stmt.setInt(3, amount);
+                    stmt.setInt(4, amount);
+                    stmt.executeUpdate();
+                } finally {
+                    if (stmt != null) {
+                        stmt.close();
+                    }
                 }
             }
         }
             publishSync(uuid);
-}
+    }
 
     public int getSellProgress(UUID uuid, String material) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -768,98 +806,105 @@ public class DatabaseManager {
                 }
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement checkStmt = conn.prepareStatement(checkQuery);
-            try {
-                checkStmt.setString(1, uuid.toString());
-                checkStmt.setString(2, material);
-                ResultSet rs = checkStmt.executeQuery();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement checkStmt = conn.prepareStatement(checkQuery);
                 try {
-                    if (rs.next()) {
-                        PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
-                        try {
-                            updateStmt.setInt(1, progress);
-                            updateStmt.setString(2, uuid.toString());
-                            updateStmt.setString(3, material);
-                            updateStmt.executeUpdate();
-                        } finally {
-                            if (updateStmt != null) {
-                                updateStmt.close();
+                    checkStmt.setString(1, uuid.toString());
+                    checkStmt.setString(2, material);
+                    ResultSet rs = checkStmt.executeQuery();
+                    try {
+                        if (rs.next()) {
+                            PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
+                            try {
+                                updateStmt.setInt(1, progress);
+                                updateStmt.setString(2, uuid.toString());
+                                updateStmt.setString(3, material);
+                                updateStmt.executeUpdate();
+                            } finally {
+                                if (updateStmt != null) {
+                                    updateStmt.close();
+                                }
+                            }
+                        } else {
+                            PreparedStatement insertStmt = conn.prepareStatement(insertQuery);
+                            try {
+                                insertStmt.setString(1, uuid.toString());
+                                insertStmt.setString(2, material);
+                                insertStmt.setInt(3, progress);
+                                insertStmt.executeUpdate();
+                            } finally {
+                                if (insertStmt != null) {
+                                    insertStmt.close();
+                                }
                             }
                         }
-                    } else {
-                        PreparedStatement insertStmt = conn.prepareStatement(insertQuery);
-                        try {
-                            insertStmt.setString(1, uuid.toString());
-                            insertStmt.setString(2, material);
-                            insertStmt.setInt(3, progress);
-                            insertStmt.executeUpdate();
-                        } finally {
-                            if (insertStmt != null) {
-                                insertStmt.close();
-                            }
+                    } finally {
+                        if (rs != null) {
+                            rs.close();
                         }
                     }
                 } finally {
-                    if (rs != null) {
-                        rs.close();
+                    if (checkStmt != null) {
+                        checkStmt.close();
                     }
                 }
-            } finally {
-                if (checkStmt != null) {
-                    checkStmt.close();
-                }
             }
         }
             publishSync(uuid);
-}
+    }
 
     public void addSellProgress(UUID uuid, String material, int amount) throws SQLException, ClassNotFoundException {
-        // 如果物品已解锁，不再记录进度
-        if (isUnlocked(uuid, material)) {
-            return;
-        }
-        
+        if (!isUnlocked(uuid, material)) addSellProgressBatch(uuid, Map.of(material, amount));
+    }
+
+    public void addSellProgressBatch(UUID uuid, Map<String, Integer> increments) throws SQLException, ClassNotFoundException {
+        if (increments.isEmpty()) return;
         ensurePlayerExists(uuid);
-        
-        String query;
+        String query = "INSERT INTO " + tablePrefix + "player_sell_progress (uuid, material, progress) VALUES (?, ?, ?) "
+                + (isMySQL ? "ON DUPLICATE KEY UPDATE progress = progress + ?"
+                          : "ON CONFLICT(uuid, material) DO UPDATE SET progress = progress + ?");
         if (isMySQL) {
-            query = "INSERT INTO " + tablePrefix + "player_sell_progress (uuid, material, progress) VALUES (?, ?, ?) " +
-                    "ON DUPLICATE KEY UPDATE progress = progress + ?";
-        } else {
-            query = "INSERT INTO " + tablePrefix + "player_sell_progress (uuid, material, progress) VALUES (?, ?, ?) " +
-                    "ON CONFLICT(uuid, material) DO UPDATE SET progress = progress + ?";
-        }
-        
-        if (isMySQL) {
-            // MySQL 连接，使用 try-with-resources 确保连接归还到连接池
-            try (Connection conn = getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(query)) {
-                stmt.setString(1, uuid.toString());
-                stmt.setString(2, material);
-                stmt.setInt(3, amount);
-                stmt.setInt(4, amount);
-                stmt.executeUpdate();
+            try (Connection conn = getConnection()) {
+                writeSellProgressBatch(conn, query, uuid, increments);
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            try {
-                stmt.setString(1, uuid.toString());
-                stmt.setString(2, material);
-                stmt.setInt(3, amount);
-                stmt.setInt(4, amount);
-                stmt.executeUpdate();
-            } finally {
-                if (stmt != null) {
-                    stmt.close();
+            synchronized (this) {
+                Connection conn = getConnection();
+                conn.setAutoCommit(false);
+                try {
+                    writeSellProgressBatch(conn, query, uuid, increments);
+                    conn.commit();
+                } catch (SQLException exception) {
+                    try {
+                        conn.rollback();
+                    } catch (SQLException rollbackException) {
+                        exception.addSuppressed(rollbackException);
+                    }
+                    throw exception;
+                } finally {
+                    conn.setAutoCommit(true);
                 }
             }
         }
-            publishSync(uuid);
-}
+        publishSync(uuid);
+    }
+
+    private void writeSellProgressBatch(Connection conn, String query, UUID uuid, Map<String, Integer> increments)
+            throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            String playerId = uuid.toString();
+            for (var entry : increments.entrySet()) {
+                stmt.setString(1, playerId);
+                stmt.setString(2, entry.getKey());
+                stmt.setInt(3, entry.getValue());
+                stmt.setInt(4, entry.getValue());
+                stmt.addBatch();
+            }
+            stmt.executeBatch();
+        }
+    }
 
     public boolean isUnlocked(UUID uuid, String material) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -902,19 +947,23 @@ public class DatabaseManager {
     public void unlockItem(UUID uuid, String material) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
 
-        if (!isUnlocked(uuid, material)) {
-            String query = "INSERT INTO " + tablePrefix + "unlocked_items (uuid, material) VALUES (?, ?)";
-            
-            if (isMySQL) {
-                // MySQL 连接，使用 try-with-resources 确保连接归还到连接池
-                try (Connection conn = getConnection();
-                     PreparedStatement stmt = conn.prepareStatement(query)) {
-                    stmt.setString(1, uuid.toString());
-                    stmt.setString(2, material);
-                    stmt.executeUpdate();
-                }
-            } else {
-                // SQLite 连接，保持长连接
+        // 幂等插入：并发场景下两个线程同时通过 isUnlocked 检查时，
+        // 第二个 INSERT 也不会因主键冲突抛异常导致解锁失败
+        String query = isMySQL
+                ? "INSERT IGNORE INTO " + tablePrefix + "unlocked_items (uuid, material) VALUES (?, ?)"
+                : "INSERT OR IGNORE INTO " + tablePrefix + "unlocked_items (uuid, material) VALUES (?, ?)";
+
+        if (isMySQL) {
+            // MySQL 连接，使用 try-with-resources 确保连接归还到连接池
+            try (Connection conn = getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, uuid.toString());
+                stmt.setString(2, material);
+                stmt.executeUpdate();
+            }
+        } else {
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
                 Connection conn = getConnection();
                 PreparedStatement stmt = conn.prepareStatement(query);
                 try {
@@ -929,93 +978,104 @@ public class DatabaseManager {
             }
         }
             publishSync(uuid);
-}
+    }
 
-    public void unlockAllItems(UUID uuid) throws SQLException, ClassNotFoundException {
+    /**
+     * 管理员指令专用：重新锁定单个物品。
+     * 同时删除该物品的挖掘/出售进度，否则进度仍满足条件时下一次挖掘/出售会立即重新解锁。
+     */
+    public void lockItem(UUID uuid, String material) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
 
-        // 首先删除已有的解锁记录
-        String deleteQuery = "DELETE FROM " + tablePrefix + "unlocked_items WHERE uuid = ?";
-        
+        String[] queries = {
+                "DELETE FROM " + tablePrefix + "unlocked_items WHERE uuid = ? AND material = ?",
+                "DELETE FROM " + tablePrefix + "player_mine_progress WHERE uuid = ? AND material = ?",
+                "DELETE FROM " + tablePrefix + "player_sell_progress WHERE uuid = ? AND material = ?"
+        };
+
         if (isMySQL) {
-            // MySQL 连接，使用 try-with-resources 确保连接归还到连接池
-            try (Connection conn = getConnection();
-                 PreparedStatement deleteStmt = conn.prepareStatement(deleteQuery)) {
-                deleteStmt.setString(1, uuid.toString());
-                deleteStmt.executeUpdate();
-
-                // 使用批量插入来提高性能
-                if (!configManager.getItemMaterialNames().isEmpty()) {
-                    List<String> materialNames = configManager.getItemMaterialNames();
-                    if (materialNames.isEmpty()) {
-                        return;
-                    }
-
-                    // 构建批量插入SQL
-                    StringBuilder insertQueryBuilder = new StringBuilder("INSERT INTO " + tablePrefix + "unlocked_items (uuid, material) VALUES ");
-                    for (int i = 0; i < materialNames.size(); i++) {
-                        if (i > 0) {
-                            insertQueryBuilder.append(", ");
-                        }
-                        insertQueryBuilder.append("(?, ?)");
-                    }
-
-                    try (PreparedStatement insertStmt = conn.prepareStatement(insertQueryBuilder.toString())) {
-                        int paramIndex = 1;
-                        for (String materialName : materialNames) {
-                            insertStmt.setString(paramIndex++, uuid.toString());
-                            insertStmt.setString(paramIndex++, materialName);
-                        }
-                        insertStmt.executeUpdate();
+            try (Connection conn = getConnection()) {
+                for (String query : queries) {
+                    try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                        stmt.setString(1, uuid.toString());
+                        stmt.setString(2, material);
+                        stmt.executeUpdate();
                     }
                 }
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement deleteStmt = conn.prepareStatement(deleteQuery);
-            try {
-                deleteStmt.setString(1, uuid.toString());
-                deleteStmt.executeUpdate();
-
-                // 使用批量插入来提高性能
-                if (!configManager.getItemMaterialNames().isEmpty()) {
-                    List<String> materialNames = configManager.getItemMaterialNames();
-                    if (materialNames.isEmpty()) {
-                        return;
-                    }
-
-                    // 构建批量插入SQL
-                    StringBuilder insertQueryBuilder = new StringBuilder("INSERT INTO " + tablePrefix + "unlocked_items (uuid, material) VALUES ");
-                    for (int i = 0; i < materialNames.size(); i++) {
-                        if (i > 0) {
-                            insertQueryBuilder.append(", ");
-                        }
-                        insertQueryBuilder.append("(?, ?)");
-                    }
-
-                    PreparedStatement insertStmt = conn.prepareStatement(insertQueryBuilder.toString());
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                for (String query : queries) {
+                    PreparedStatement stmt = conn.prepareStatement(query);
                     try {
-                        int paramIndex = 1;
-                        for (String materialName : materialNames) {
-                            insertStmt.setString(paramIndex++, uuid.toString());
-                            insertStmt.setString(paramIndex++, materialName);
-                        }
-                        insertStmt.executeUpdate();
+                        stmt.setString(1, uuid.toString());
+                        stmt.setString(2, material);
+                        stmt.executeUpdate();
                     } finally {
-                        if (insertStmt != null) {
-                            insertStmt.close();
+                        if (stmt != null) {
+                            stmt.close();
                         }
                     }
-                }
-            } finally {
-                if (deleteStmt != null) {
-                    deleteStmt.close();
                 }
             }
         }
             publishSync(uuid);
-}
+    }
+
+    public void unlockAllItems(UUID uuid) throws SQLException, ClassNotFoundException {
+        ensurePlayerExists(uuid);
+
+        List<String> materialNames = configManager.getItemMaterialNames();
+        if (materialNames.isEmpty()) {
+            return;
+        }
+
+        // 只补插缺失的解锁记录，不删除已有记录：
+        // 1. 解锁一旦获得即永久有效，items.yml 改动不应回收玩家的解锁；
+        // 2. 避免"先删后插"中途失败导致玩家解锁被清空。
+        String verb = isMySQL ? "INSERT IGNORE INTO " : "INSERT OR IGNORE INTO ";
+        StringBuilder insertQueryBuilder = new StringBuilder(verb + tablePrefix + "unlocked_items (uuid, material) VALUES ");
+        for (int i = 0; i < materialNames.size(); i++) {
+            if (i > 0) {
+                insertQueryBuilder.append(", ");
+            }
+            insertQueryBuilder.append("(?, ?)");
+        }
+        String insertQuery = insertQueryBuilder.toString();
+
+        if (isMySQL) {
+            try (Connection conn = getConnection();
+                 PreparedStatement insertStmt = conn.prepareStatement(insertQuery)) {
+                int paramIndex = 1;
+                for (String materialName : materialNames) {
+                    insertStmt.setString(paramIndex++, uuid.toString());
+                    insertStmt.setString(paramIndex++, materialName);
+                }
+                insertStmt.executeUpdate();
+            }
+        } else {
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement insertStmt = conn.prepareStatement(insertQuery);
+                try {
+                    int paramIndex = 1;
+                    for (String materialName : materialNames) {
+                        insertStmt.setString(paramIndex++, uuid.toString());
+                        insertStmt.setString(paramIndex++, materialName);
+                    }
+                    insertStmt.executeUpdate();
+                } finally {
+                    if (insertStmt != null) {
+                        insertStmt.close();
+                    }
+                }
+            }
+        }
+            publishSync(uuid);
+    }
 
     public boolean isAutoSellEnabled(UUID uuid) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -1072,16 +1132,18 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
         } else {
-            // SQLite 连接，保持长连接
-            Connection conn = getConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            try {
-                stmt.setBoolean(1, enabled);
-                stmt.setString(2, uuid.toString());
-                stmt.executeUpdate();
-            } finally {
-                if (stmt != null) {
-                    stmt.close();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement stmt = conn.prepareStatement(query);
+                try {
+                    stmt.setBoolean(1, enabled);
+                    stmt.setString(2, uuid.toString());
+                    stmt.executeUpdate();
+                } finally {
+                    if (stmt != null) {
+                        stmt.close();
+                    }
                 }
             }
         }
@@ -1358,7 +1420,7 @@ public class DatabaseManager {
     /**
      * 累加玩家今日已获得的EMC数量
      */
-    public synchronized double consumeDailyEMCLimit(UUID uuid, String date, double requestedAmount, double dailyLimit) throws SQLException, ClassNotFoundException {
+    public double consumeDailyEMCLimit(UUID uuid, String date, double requestedAmount, double dailyLimit) throws SQLException, ClassNotFoundException {
         if (requestedAmount <= 0) {
             return 0;
         }
@@ -1370,13 +1432,24 @@ public class DatabaseManager {
         ensurePlayerExists(uuid);
         ensureDailyEMCTableExists();
 
-        Connection conn = getConnection();
+        if (isMySQL) {
+            try (Connection conn = getConnection()) {
+                return consumeDailyEMCLimit(conn, uuid, date, requestedAmount, dailyLimit);
+            }
+        }
+        synchronized (this) {
+            return consumeDailyEMCLimit(getConnection(), uuid, date, requestedAmount, dailyLimit);
+        }
+    }
+
+    private double consumeDailyEMCLimit(Connection conn, UUID uuid, String date, double requestedAmount, double dailyLimit)
+            throws SQLException {
         boolean originalAutoCommit = conn.getAutoCommit();
         try {
             conn.setAutoCommit(false);
 
             String insertQuery = isMySQL
-                    ? "INSERT IGNORE INTO " + tablePrefix + "player_daily_emc (uuid, date, emc_earned) VALUES (?, ?, 0)"
+                    ? "INSERT INTO " + tablePrefix + "player_daily_emc (uuid, date, emc_earned) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE emc_earned = emc_earned"
                     : "INSERT OR IGNORE INTO " + tablePrefix + "player_daily_emc (uuid, date, emc_earned) VALUES (?, ?, 0)";
             try (PreparedStatement insertStmt = conn.prepareStatement(insertQuery)) {
                 insertStmt.setString(1, uuid.toString());
@@ -1422,15 +1495,9 @@ public class DatabaseManager {
             }
             throw e;
         } finally {
-            try {
-                conn.setAutoCommit(originalAutoCommit);
-            } finally {
-                if (isMySQL) {
-                    conn.close();
-                }
-            }
+            conn.setAutoCommit(originalAutoCommit);
         }
-}
+    }
 
     public void addDailyEMCEarned(UUID uuid, String date, double amount) throws SQLException, ClassNotFoundException {
         ensurePlayerExists(uuid);
@@ -1455,22 +1522,25 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
         } else {
-            Connection conn = getConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            try {
-                stmt.setString(1, uuid.toString());
-                stmt.setString(2, date);
-                stmt.setDouble(3, amount);
-                stmt.setDouble(4, amount);
-                stmt.executeUpdate();
-            } finally {
-                if (stmt != null) {
-                    stmt.close();
+            // SQLite 连接，保持长连接（写操作与事务方法互斥）
+            synchronized (this) {
+                Connection conn = getConnection();
+                PreparedStatement stmt = conn.prepareStatement(query);
+                try {
+                    stmt.setString(1, uuid.toString());
+                    stmt.setString(2, date);
+                    stmt.setDouble(3, amount);
+                    stmt.setDouble(4, amount);
+                    stmt.executeUpdate();
+                } finally {
+                    if (stmt != null) {
+                        stmt.close();
+                    }
                 }
             }
         }
             publishSync(uuid);
-}
+    }
 
     /**
      * 清理过期的每日EMC记录（保留最近7天）
@@ -1493,14 +1563,17 @@ public class DatabaseManager {
                     stmt.executeUpdate();
                 }
             } else {
-                Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query);
-                try {
-                    stmt.setString(1, cutoffDate);
-                    stmt.executeUpdate();
-                } finally {
-                    if (stmt != null) {
-                        stmt.close();
+                // SQLite 连接，保持长连接（写操作与事务方法互斥）
+                synchronized (this) {
+                    Connection conn = getConnection();
+                    PreparedStatement stmt = conn.prepareStatement(query);
+                    try {
+                        stmt.setString(1, cutoffDate);
+                        stmt.executeUpdate();
+                    } finally {
+                        if (stmt != null) {
+                            stmt.close();
+                        }
                     }
                 }
             }

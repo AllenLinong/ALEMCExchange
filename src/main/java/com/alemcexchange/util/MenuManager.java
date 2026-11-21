@@ -42,6 +42,7 @@ public class MenuManager implements Listener {
     private final ConfigManager configManager;
     private final DatabaseManager databaseManager;
     private final SchedulerUtil schedulerUtil;
+    private final SaleDelivery saleDelivery;
 
     private final NamespacedKey keyAction;
     private final NamespacedKey keyRightAction;
@@ -54,6 +55,8 @@ public class MenuManager implements Listener {
 
     // ── 按钮点击冷却（按玩家全局，防连点器；gui.button-click-cooldown-ms 可调） ──
     private final Map<UUID, Long> lastButtonClickMillis = new ConcurrentHashMap<>();
+    private final Set<UUID> pendingSales = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Object> menuLoads = new ConcurrentHashMap<>();
 
     // ── 玩家运行状态 ──
     private final Map<UUID, String> browseSearches = new ConcurrentHashMap<>();
@@ -61,17 +64,14 @@ public class MenuManager implements Listener {
     private final Map<UUID, String> pendingSearchType = new ConcurrentHashMap<>();
 
     // ── 玩家数据缓存 ──
-    private final ConcurrentHashMap<UUID, Double> playerBalanceCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, Map<String, Boolean>> playerUnlockedCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, Map<String, Integer>> playerMineProgressCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, Map<String, Integer>> playerSellProgressCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, Long> playerCacheTimestamps = new ConcurrentHashMap<>();
+    private final Map<UUID, PlayerMenuCache> playerMenuCache = new ConcurrentHashMap<>();
 
-    public MenuManager(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager) {
+    public MenuManager(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager, SaleDelivery saleDelivery) {
         this.plugin = plugin;
         this.configManager = configManager;
         this.databaseManager = databaseManager;
         this.schedulerUtil = new SchedulerUtil(plugin);
+        this.saleDelivery = saleDelivery;
         this.keyAction = new NamespacedKey(plugin, "action");
         this.keyRightAction = new NamespacedKey(plugin, "raction");
         this.keyItem = new NamespacedKey(plugin, "ikey");
@@ -213,27 +213,7 @@ public class MenuManager implements Listener {
     // ══════════════════════════ 菜单打开 ══════════════════════════
 
     public void openMainMenu(Player player) {
-        ensureLayouts();
-        MenuLayout layout = layouts.get("main");
-        if (layout == null) {
-            plugin.getLogger().severe("Menu 'main' missing from menus.yml");
-            return;
-        }
-        clearPlayerCache(player.getUniqueId());
-
-        double balance = getCachedBalance(player.getUniqueId());
-        String dailyLimit = getDailyLimitDisplayText(player);
-
-        Map<String, String> ph = new HashMap<>();
-        ph.put("%balance%", String.format("%.2f", balance));
-        ph.put("%daily_limit%", dailyLimit);
-        ph.put("%tax%", String.format("%.1f", configManager.getTaxRateForPlayer(player) * 100));
-
-        MenuHolder holder = new MenuHolder("main", 1, null, layout.aSlots, layout);
-        Inventory inv = Bukkit.createInventory(holder, layout.size, ColorUtil.translateColorCodes(layout.title));
-        holder.setInventory(inv);
-        fillStaticButtons(inv, layout, ph, 1, 1, 0);
-        player.openInventory(inv);
+        openStaticMenu(player, "main");
     }
 
     public void openSellMenu(Player player) {
@@ -243,17 +223,68 @@ public class MenuManager implements Listener {
             plugin.getLogger().severe("Menu 'sell' missing from menus.yml");
             return;
         }
-        clearPlayerCache(player.getUniqueId());
+        Inventory previous = player.getOpenInventory().getTopInventory();
+        if (!layout.displaysBalance()) {
+            menuLoads.remove(player.getUniqueId());
+            showSellMenu(player, previous, layout, 0);
+            return;
+        }
+        UUID uuid = player.getUniqueId();
+        loadMenu(player, () -> {
+            double balance = readSellBalance(uuid);
+            return () -> showSellMenu(player, previous, layout, balance);
+        });
+    }
 
-        Map<String, String> ph = new HashMap<>();
-        ph.put("%balance%", String.format("%.2f", getCachedBalance(player.getUniqueId())));
-        ph.put("%tax%", String.format("%.1f", configManager.getTaxRateForPlayer(player) * 100));
-
+    private void showSellMenu(Player player, Inventory previous, MenuLayout layout, double balance) {
+        if (previous.getHolder() instanceof MenuHolder existing && existing.layout() == layout) {
+            renderSellButtons(player, previous, layout, balance);
+            return;
+        }
         MenuHolder holder = new MenuHolder("sell", 1, null, layout.aSlots, layout);
         Inventory inv = Bukkit.createInventory(holder, layout.size, ColorUtil.translateColorCodes(layout.title));
         holder.setInventory(inv);
-        fillStaticButtons(inv, layout, ph, 1, 1, 0);
+        renderSellButtons(player, inv, layout, balance);
         player.openInventory(inv);
+    }
+
+    private void loadMenu(Player player, java.util.function.Supplier<Runnable> prepare) {
+        UUID uuid = player.getUniqueId();
+        Inventory previous = player.getOpenInventory().getTopInventory();
+        long stamp = configManager.getConfigStamp();
+        Object request = new Object();
+        menuLoads.put(uuid, request);
+        if (!schedulerUtil.runAsync(() -> {
+            boolean scheduled = false;
+            try {
+                if (menuLoads.get(uuid) != request) return;
+                Runnable render = prepare.get();
+                if (menuLoads.get(uuid) != request) return;
+                scheduled = schedulerUtil.runAtEntity(player, () -> {
+                    if (menuLoads.remove(uuid, request) && player.isOnline()
+                            && configManager.getConfigStamp() == stamp
+                            && player.getOpenInventory().getTopInventory() == previous) render.run();
+                }, () -> menuLoads.remove(uuid, request));
+            } finally {
+                if (!scheduled) menuLoads.remove(uuid, request);
+            }
+        })) menuLoads.remove(uuid, request);
+    }
+
+    private double readSellBalance(UUID uuid) {
+        try {
+            return databaseManager.getEMCBalance(uuid);
+        } catch (SQLException | ClassNotFoundException e) {
+            plugin.getLogger().severe("Error getting sell balance: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private void renderSellButtons(Player player, Inventory inv, MenuLayout layout, double balance) {
+        Map<String, String> ph = new HashMap<>();
+        ph.put("%balance%", String.format("%.2f", balance));
+        ph.put("%tax%", String.format("%.1f", configManager.getTaxRateForPlayer(player) * 100));
+        fillStaticButtons(inv, layout, ph, 1, 1, 0);
     }
 
     public void openBrowseMenu(Player player) {
@@ -267,46 +298,16 @@ public class MenuManager implements Listener {
             plugin.getLogger().severe("Menu 'browse' missing from menus.yml");
             return;
         }
-        clearPlayerCache(player.getUniqueId());
-
-        String search = browseSearches.get(player.getUniqueId());
-        List<String> materials = applySearch(configManager.getItemMaterialNames(), search);
-
-        int totalItems = materials.size();
-        int itemsPerPage = Math.max(1, layout.aSlots.size());
-        int totalPages = (totalItems + itemsPerPage - 1) / itemsPerPage;
-        if (totalPages == 0) totalPages = 1;
-        if (page > totalPages) page = totalPages;
-        if (page < 1) page = 1;
-
-        int startIndex = (page - 1) * itemsPerPage;
-        int endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-        List<String> pageMaterials = materials.subList(startIndex, endIndex);
-
-        Map<String, Boolean> unlocked = getCachedUnlockedStatuses(player.getUniqueId(), pageMaterials);
-        Map<String, Integer> mineProg = getCachedMineProgresses(player.getUniqueId(), pageMaterials);
-        Map<String, Integer> sellProg = getCachedSellProgresses(player.getUniqueId(), pageMaterials);
-
-        Map<String, String> ph = pagePlaceholders(page, totalPages, totalItems, search);
-
-        MenuHolder holder = new MenuHolder("browse", page, search, layout.aSlots, layout);
-        Inventory inv = Bukkit.createInventory(holder, layout.size,
-                ColorUtil.translateColorCodes(applyPlaceholders(layout.title, ph)));
-        holder.setInventory(inv);
-        fillStaticButtons(inv, layout, ph, page, totalPages, totalItems);
-
-        ButtonDef template = layout.buttons.get('A');
-        for (int i = 0; i < pageMaterials.size(); i++) {
-            String materialName = pageMaterials.get(i);
-            ItemStack icon = buildItemIcon(materialName, template, false,
-                    unlocked.getOrDefault(materialName, false),
-                    mineProg.getOrDefault(materialName, 0),
-                    sellProg.getOrDefault(materialName, 0));
-            if (icon != null) {
-                inv.setItem(layout.aSlots.get(i), icon);
-            }
-        }
-        player.openInventory(inv);
+        UUID uuid = player.getUniqueId();
+        String search = browseSearches.get(uuid);
+        MenuPage menuPage = slicePage(layout, applySearch(configManager.getItemMaterialNames(), search), page);
+        loadMenu(player, () -> {
+            List<String> keys = menuPage.materials();
+            Map<String, Boolean> unlocked = getCachedUnlockedStatuses(uuid, keys);
+            Map<String, Integer> mined = getCachedMineProgresses(uuid, keys);
+            Map<String, Integer> sold = getCachedSellProgresses(uuid, keys);
+            return () -> renderItemPage(player, layout, search, menuPage, unlocked, mined, sold, false, 0);
+        });
     }
 
     public void openExchangeMenu(Player player) {
@@ -320,42 +321,39 @@ public class MenuManager implements Listener {
             plugin.getLogger().severe("Menu 'exchange' missing from menus.yml");
             return;
         }
-        clearPlayerCache(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+        String search = exchangeSearches.get(uuid);
+        List<String> materials = configManager.getItemMaterialNames();
+        List<String> matching = applySearch(materials, search);
+        loadMenu(player, () -> {
+            Map<String, Boolean> unlocked = getCachedUnlockedStatuses(uuid, materials);
+            List<String> available = matching.stream().filter(key -> unlocked.getOrDefault(key, false)).toList();
+            MenuPage menuPage = slicePage(layout, available, page);
+            double balance = layout.displaysBalance() ? readSellBalance(uuid) : 0;
+            return () -> renderItemPage(player, layout, search, menuPage, unlocked, Map.of(), Map.of(), true, balance);
+        });
+    }
 
-        String search = exchangeSearches.get(player.getUniqueId());
-        List<String> allMaterials = configManager.getItemMaterialNames();
-        Map<String, Boolean> unlockedAll = getCachedUnlockedStatuses(player.getUniqueId(), allMaterials);
-        List<String> unlockedMaterials = new ArrayList<>(allMaterials.size());
-        for (String materialName : allMaterials) {
-            if (unlockedAll.getOrDefault(materialName, false)) {
-                unlockedMaterials.add(materialName);
-            }
-        }
-        List<String> materials = applySearch(unlockedMaterials, search);
+    private MenuPage slicePage(MenuLayout layout, List<String> materials, int page) {
+        int pageSize = Math.max(1, layout.aSlots.size());
+        int pages = Math.max(1, (materials.size() + pageSize - 1) / pageSize);
+        int current = Math.max(1, Math.min(page, pages));
+        int start = (current - 1) * pageSize;
+        return new MenuPage(current, pages, materials.size(),
+                materials.subList(start, Math.min(start + layout.aSlots.size(), materials.size())));
+    }
 
-        int totalItems = materials.size();
-        int itemsPerPage = Math.max(1, layout.aSlots.size());
-        int totalPages = (totalItems + itemsPerPage - 1) / itemsPerPage;
-        if (totalPages == 0) totalPages = 1;
-        if (page > totalPages) page = totalPages;
-        if (page < 1) page = 1;
-
-        int startIndex = (page - 1) * itemsPerPage;
-        int endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-        List<String> pageMaterials = materials.subList(startIndex, endIndex);
-
-        double balance;
-        try {
-            balance = databaseManager.getEMCBalance(player.getUniqueId());
-        } catch (SQLException | ClassNotFoundException e) {
-            plugin.getLogger().severe("Error getting balance: " + e.getMessage());
-            balance = 0;
-        }
-
+    private void renderItemPage(Player player, MenuLayout layout, String search, MenuPage menuPage,
+                                Map<String, Boolean> unlocked, Map<String, Integer> mineProg,
+                                Map<String, Integer> sellProg, boolean exchange, double balance) {
+        int page = menuPage.page();
+        int totalPages = menuPage.pages();
+        int totalItems = menuPage.total();
+        List<String> pageMaterials = menuPage.materials();
         Map<String, String> ph = pagePlaceholders(page, totalPages, totalItems, search);
-        ph.put("%balance%", String.format("%.2f", balance));
 
-        MenuHolder holder = new MenuHolder("exchange", page, search, layout.aSlots, layout);
+        if (exchange) ph.put("%balance%", String.format("%.2f", balance));
+        MenuHolder holder = new MenuHolder(layout.name, page, search, layout.aSlots, layout);
         Inventory inv = Bukkit.createInventory(holder, layout.size,
                 ColorUtil.translateColorCodes(applyPlaceholders(layout.title, ph)));
         holder.setInventory(inv);
@@ -364,13 +362,18 @@ public class MenuManager implements Listener {
         ButtonDef template = layout.buttons.get('A');
         for (int i = 0; i < pageMaterials.size(); i++) {
             String materialName = pageMaterials.get(i);
-            ItemStack icon = buildItemIcon(materialName, template, true, true, 0, 0);
+            ItemStack icon = buildItemIcon(materialName, template, exchange,
+                    unlocked.getOrDefault(materialName, false),
+                    mineProg.getOrDefault(materialName, 0),
+                    sellProg.getOrDefault(materialName, 0));
             if (icon != null) {
                 inv.setItem(layout.aSlots.get(i), icon);
             }
         }
         player.openInventory(inv);
     }
+
+    private record MenuPage(int page, int pages, int total, List<String> materials) {}
 
     /** 按钮的主左键动作：triggers.left 优先，action 快捷方式兜底 */
     private String primaryLeftAction(ButtonDef def) {
@@ -583,25 +586,24 @@ public class MenuManager implements Listener {
         }
 
         UUID uuid = player.getUniqueId();
-        List<String> source = configManager.getItemMaterialNames();
-        List<String> visible;
+        String keyword = message;
+        List<String> matching = applySearch(configManager.getItemMaterialNames(), keyword);
         if ("exchange".equals(menuType)) {
-            try {
-                Map<String, Boolean> unlocked = databaseManager.getUnlockedStatuses(uuid, source);
-                List<String> unlockedList = new ArrayList<>();
-                for (String m : source) {
-                    if (unlocked.getOrDefault(m, false)) unlockedList.add(m);
-                }
-                visible = unlockedList;
-            } catch (SQLException | ClassNotFoundException e) {
-                visible = source;
-            }
+            loadMenu(player, () -> {
+                Map<String, Boolean> unlocked = getCachedUnlockedStatuses(uuid, matching);
+                boolean hasMatch = matching.stream().anyMatch(key -> unlocked.getOrDefault(key, false));
+                return () -> applySearchInput(player, menuType, keyword, hasMatch);
+            });
         } else {
-            visible = source;
+            applySearchInput(player, menuType, keyword, !matching.isEmpty());
         }
-        int matches = applySearch(visible, message).size();
+    }
 
-        if (matches == 0) {
+    private void applySearchInput(Player player, String menuType, String message, boolean hasMatch) {
+        var lang = configManager.getLang();
+        String prefix = lang.getString("prefix", "");
+        UUID uuid = player.getUniqueId();
+        if (!hasMatch) {
             String msg = lang.getString("search.no-result", "&c没有匹配的物品。")
                     .replace("{keyword}", message);
             player.sendMessage(ColorUtil.translateColorCodes(prefix + msg));
@@ -649,7 +651,9 @@ public class MenuManager implements Listener {
         if ("sell".equals(holder.menuType)) {
             if (holder.layoutASlots().contains(slot)) return;
             event.setCancelled(true);
-            schedulerUtil.runAtEntity(player, () -> handleSellClick(player), null);
+            schedulerUtil.runAtEntity(player, () -> {
+                if (player.getOpenInventory().getTopInventory() == top) handleSellClick(player);
+            }, null);
             return;
         }
 
@@ -842,6 +846,10 @@ public class MenuManager implements Listener {
 
     /** 通用菜单渲染：任意自定义菜单文件（仅静态按钮，A 槽留空） */
     private void openCustomMenu(Player player, String menuName) {
+        openStaticMenu(player, menuName);
+    }
+
+    private void openStaticMenu(Player player, String menuName) {
         ensureLayouts();
         MenuLayout layout = layouts.get(menuName);
         if (layout == null) {
@@ -849,20 +857,36 @@ public class MenuManager implements Listener {
                     configManager.getLang().getString("prefix", "") + "&c菜单不存在: " + menuName));
             return;
         }
-        clearPlayerCache(player.getUniqueId());
-
-        double balance = getCachedBalance(player.getUniqueId());
-        Map<String, String> ph = new HashMap<>();
-        ph.put("%balance%", String.format("%.2f", balance));
-        ph.put("%daily_limit%", getDailyLimitDisplayText(player));
-        ph.put("%tax%", String.format("%.1f", configManager.getTaxRateForPlayer(player) * 100));
-        ph.put("%player%", player.getName());
-
-        MenuHolder holder = new MenuHolder(menuName, 1, null, layout.aSlots, layout);
-        Inventory inv = Bukkit.createInventory(holder, layout.size, ColorUtil.translateColorCodes(layout.title));
-        holder.setInventory(inv);
-        fillStaticButtons(inv, layout, ph, 1, 1, 0);
-        player.openInventory(inv);
+        UUID uuid = player.getUniqueId();
+        double dailyLimit = layout.usesPlaceholder("%daily_limit%") && configManager.isDailyLimitEnabled()
+                ? configManager.getDailyLimitForPlayer(player) : -1;
+        loadMenu(player, () -> {
+            boolean displaysBalance = layout.displaysBalance();
+            DatabaseManager.PlayerDisplayData data = null;
+            if (displaysBalance || dailyLimit != -1) {
+                try {
+                    data = databaseManager.getPlayerDisplayData(uuid, dailyLimit == -1 ? null : databaseManager.getEffectiveDate());
+                } catch (SQLException | ClassNotFoundException | RuntimeException e) {
+                    plugin.getLogger().warning("Error getting menu display data: " + e.getMessage());
+                }
+            }
+            double balance = data == null ? 0 : data.balance();
+            String remaining = dailyLimit == -1 || data == null
+                    ? configManager.getLang().getString("daily_limit.unlimited", "&a无限")
+                    : "&6" + String.format("%.0f", Math.max(0, dailyLimit - data.earned()));
+            return () -> {
+                Map<String, String> ph = new HashMap<>();
+                ph.put("%balance%", String.format("%.2f", balance));
+                ph.put("%daily_limit%", remaining);
+                ph.put("%tax%", String.format("%.1f", configManager.getTaxRateForPlayer(player) * 100));
+                ph.put("%player%", player.getName());
+                MenuHolder holder = new MenuHolder(menuName, 1, null, layout.aSlots, layout);
+                Inventory inv = Bukkit.createInventory(holder, layout.size, ColorUtil.translateColorCodes(layout.title));
+                holder.setInventory(inv);
+                fillStaticButtons(inv, layout, ph, 1, 1, 0);
+                player.openInventory(inv);
+            };
+        });
     }
 
     @EventHandler
@@ -885,6 +909,7 @@ public class MenuManager implements Listener {
     @EventHandler
     public void onPlayerQuit(org.bukkit.event.player.PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
+        menuLoads.remove(uuid);
         lastButtonClickMillis.remove(uuid);
         browseSearches.remove(uuid);
         exchangeSearches.remove(uuid);
@@ -912,182 +937,164 @@ public class MenuManager implements Listener {
     // ══════════════════════════ 出售逻辑 ══════════════════════════
 
     private void handleSellClick(Player player) {
-        MenuLayout layout = layouts.get("sell");
-        if (layout == null) return;
-        List<Integer> aSlots = layout.aSlots;
-
-        final double[] totalEMC = {0};
-        final List<ItemStack> returnItems = new ArrayList<>();
-        final List<ItemStack> itemsToRemove = new ArrayList<>();
-        final List<String> materialNames = new ArrayList<>();
-        final List<Integer> amounts = new ArrayList<>();
-        final List<Double> emcPerItemList = new ArrayList<>();
-
         Inventory inv = player.getOpenInventory().getTopInventory();
-        for (int slot : aSlots) {
+        if (!(inv.getHolder() instanceof MenuHolder holder) || !"sell".equals(holder.menuType())) return;
+        UUID uuid = player.getUniqueId();
+        if (!pendingSales.add(uuid)) return;
+
+        double taxRate = configManager.getTaxRateForPlayer(player);
+        double dailyLimit = configManager.isDailyLimitEnabled() ? configManager.getDailyLimitForPlayer(player) : -1;
+        List<SaleLine> lines = new ArrayList<>();
+        List<ItemStack> rejected = new ArrayList<>();
+        double total = 0;
+        for (int slot : holder.layoutASlots()) {
             ItemStack item = inv.getItem(slot);
-            if (item == null || item.getType() == Material.AIR) continue;
-            // CE 物品映射为 "ce:ns:id"，原版物品映射为材质名
-            String saleKey = CeItemUtil.resolveSaleKey(item);
-            if (configManager.hasItem(saleKey)) {
-                double emcPerItem = configManager.getItemEMC(saleKey);
-                int amount = item.getAmount();
-                totalEMC[0] += emcPerItem * amount;
-                materialNames.add(saleKey);
-                amounts.add(amount);
-                emcPerItemList.add(emcPerItem);
-                itemsToRemove.add(item.clone());
+            if (item == null || item.getType().isAir()) continue;
+            String key = CeItemUtil.resolveSaleKey(item);
+            double price = configManager.getItemEMC(key);
+            double value = item.getAmount() * price;
+            if (configManager.hasItem(key) && value > 0 && Double.isFinite(total + value)) {
+                lines.add(new SaleLine(key, item.getAmount(), price, item.clone()));
+                total += value;
             } else {
-                returnItems.add(item.clone());
+                rejected.add(item.clone());
             }
             inv.setItem(slot, null);
         }
-
-        if (totalEMC[0] > 0) {
-            final double finalTotalEMC = totalEMC[0];
-            final List<String> finalMaterialNames = materialNames;
-            final List<Integer> finalAmounts = amounts;
-            final List<Double> finalEmcPerItemList = emcPerItemList;
-
-            schedulerUtil.runAsync(() -> {
-                double taxRate = configManager.getTaxRateForPlayer(player);
-                String consumedDailyDate = null;
-                double consumedDailyEMC = 0;
-                boolean balanceCredited = false;
-
-                try {
-                    double allowedEMC = finalTotalEMC;
-                    List<Integer> actualAmounts = new ArrayList<>(finalAmounts);
-                    List<ItemStack> limitReturnItems = new ArrayList<>();
-                    if (configManager.isDailyLimitEnabled()) {
-                        double dailyLimit = configManager.getDailyLimitForPlayer(player);
-                        if (dailyLimit != -1) {
-                            String effectiveDate = databaseManager.getEffectiveDate();
-                            consumedDailyDate = effectiveDate;
-                            double remaining = databaseManager.consumeDailyEMCLimit(player.getUniqueId(), effectiveDate, finalTotalEMC, dailyLimit);
-                            consumedDailyEMC = remaining;
-
-                            if (remaining <= 0) {
-                                allowedEMC = 0;
-                            } else if (remaining < finalTotalEMC) {
-                                allowedEMC = 0;
-                                actualAmounts.clear();
-                                double remainingLimit = remaining;
-
-                                for (int i = 0; i < finalMaterialNames.size(); i++) {
-                                    double itemTotalEMC = finalEmcPerItemList.get(i) * finalAmounts.get(i);
-                                    if (itemTotalEMC <= remainingLimit) {
-                                        allowedEMC += itemTotalEMC;
-                                        actualAmounts.add(finalAmounts.get(i));
-                                        remainingLimit -= itemTotalEMC;
-                                    } else if (remainingLimit > 0) {
-                                        int sellableAmount = (int) (remainingLimit / finalEmcPerItemList.get(i));
-                                        if (sellableAmount > 0) {
-                                            double sellableEMC = sellableAmount * finalEmcPerItemList.get(i);
-                                            allowedEMC += sellableEMC;
-                                            actualAmounts.add(sellableAmount);
-                                            remainingLimit -= sellableEMC;
-
-                                            final int unsoldAmount = finalAmounts.get(i) - sellableAmount;
-                                            if (unsoldAmount > 0) {
-                                                ItemStack unsoldItem = itemsToRemove.get(i).clone();
-                                                unsoldItem.setAmount(unsoldAmount);
-                                                limitReturnItems.add(unsoldItem);
-                                            }
-                                        } else {
-                                            actualAmounts.add(0);
-                                            limitReturnItems.add(itemsToRemove.get(i).clone());
-                                        }
-                                    } else {
-                                        actualAmounts.add(0);
-                                        limitReturnItems.add(itemsToRemove.get(i).clone());
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (consumedDailyDate != null && consumedDailyEMC > allowedEMC) {
-                        databaseManager.addDailyEMCEarned(player.getUniqueId(), consumedDailyDate, -(consumedDailyEMC - allowedEMC));
-                        consumedDailyEMC = allowedEMC;
-                    }
-
-                    if (allowedEMC <= 0) {
-                        final List<ItemStack> itemsToReturn = limitReturnItems.isEmpty()
-                                ? cloneItemList(itemsToRemove)
-                                : cloneItemList(limitReturnItems);
-                        schedulerUtil.runTask(() -> {
-                            String message = configManager.getLang().getString("prefix") +
-                                    configManager.getLang().getString("daily_limit.reached");
-                            player.sendMessage(ColorUtil.translateColorCodes(message));
-                            returnItemsToPlayer(player, itemsToReturn);
-                        });
-                        return;
-                    }
-
-                    double tax = allowedEMC * taxRate;
-                    final double netEMC = allowedEMC - tax;
-
-                    databaseManager.addEMCBalance(player.getUniqueId(), netEMC);
-                    balanceCredited = true;
-
-                    try {
-                        for (int i = 0; i < finalMaterialNames.size(); i++) {
-                            String materialName = finalMaterialNames.get(i);
-                            int amount = actualAmounts.get(i);
-
-                            if (amount <= 0) continue;
-
-                            if (!databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
-                                int requiredSell = configManager.getRequiredSell(materialName);
-                                if (requiredSell > 0) {
-                                    int currentProgress = databaseManager.getSellProgress(player.getUniqueId(), materialName);
-                                    int addAmount = Math.min(amount, requiredSell - currentProgress);
-                                    if (addAmount > 0) {
-                                        databaseManager.addSellProgress(player.getUniqueId(), materialName, addAmount);
-                                    }
-                                }
-                                checkUnlock(player, materialName);
-                            }
-                        }
-                    } catch (SQLException | ClassNotFoundException progressException) {
-                        plugin.getLogger().severe("Error updating sell progress: " + progressException.getMessage());
-                    }
-
-                    final List<ItemStack> finalLimitReturnItems = cloneItemList(limitReturnItems);
-                    schedulerUtil.runTask(() -> {
-                        returnItemsToPlayer(player, finalLimitReturnItems);
-                        String message = configManager.getLang().getString("prefix") +
-                                configManager.getLang().getString("menu.sell.success").replace("{amount}", String.format("%.2f", netEMC));
-                        player.sendMessage(ColorUtil.translateColorCodes(message));
-                    });
-                } catch (SQLException | ClassNotFoundException e) {
-                    if (!balanceCredited && consumedDailyDate != null && consumedDailyEMC > 0) {
-                        try {
-                            databaseManager.addDailyEMCEarned(player.getUniqueId(), consumedDailyDate, -consumedDailyEMC);
-                        } catch (SQLException | ClassNotFoundException refundException) {
-                            plugin.getLogger().severe("Error refunding daily EMC limit: " + refundException.getMessage());
-                        }
-                    }
-                    final boolean shouldReturnItems = !balanceCredited;
-                    schedulerUtil.runTask(() -> {
-                        player.sendMessage(ColorUtil.translateColorCodes(configManager.getLang().getString("prefix") + configManager.getLang().getString("menu.sell.failed")));
-                        if (shouldReturnItems) {
-                            for (ItemStack item : itemsToRemove) {
-                                returnItemToPlayer(player, item.clone());
-                            }
-                        }
-                    });
-                    plugin.getLogger().severe("Error handling sell: " + e.getMessage());
-                }
-            });
+        returnItemsToPlayer(player, rejected);
+        if (lines.isEmpty()) {
+            pendingSales.remove(uuid);
+            return;
         }
 
-        for (ItemStack item : returnItems) {
-            returnItemToPlayer(player, item.clone());
+        double requested = total;
+        boolean displaysBalance = holder.layout() != null && holder.layout().displaysBalance();
+        try {
+            if (schedulerUtil.runAsync(() -> settleSale(uuid, inv, holder, lines, requested, taxRate, dailyLimit, displaysBalance))) return;
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Could not schedule sale", e);
         }
-        schedulerUtil.runTask(() -> openSellMenu(player));
+        pendingSales.remove(uuid);
+        returnItemsToPlayer(player, lines.stream().map(SaleLine::item).toList());
     }
+
+    private void settleSale(UUID uuid, Inventory inv, MenuHolder holder, List<SaleLine> lines,
+                            double requested, double taxRate, double dailyLimit, boolean displaysBalance) {
+        int[] sold = new int[lines.size()];
+        boolean credited = false;
+        double consumed = 0;
+        String date = null;
+        double net = 0;
+        String result = "menu.sell.failed";
+        List<String> unlocked = new ArrayList<>();
+        Double balance = null;
+        try {
+            double available = requested;
+            if (dailyLimit >= 0) {
+                date = databaseManager.getEffectiveDate();
+                consumed = databaseManager.consumeDailyEMCLimit(uuid, date, requested, dailyLimit);
+                available = consumed;
+            }
+            double gross = 0;
+            Map<String, Integer> soldByKey = new LinkedHashMap<>();
+            for (int index = 0; index < lines.size(); index++) {
+                SaleLine line = lines.get(index);
+                int count = available >= requested || line.amount() * line.price() <= available - gross
+                        ? line.amount() : Math.max(0, (int) ((available - gross) / line.price()));
+                if (count <= 0) continue;
+                sold[index] = count;
+                gross += count * line.price();
+                soldByKey.merge(line.key(), count, Integer::sum);
+            }
+            if (date != null && consumed > gross) {
+                databaseManager.addDailyEMCEarned(uuid, date, gross - consumed);
+                consumed = gross;
+            }
+            if (gross <= 0) {
+                result = "daily_limit.reached";
+            } else {
+                net = gross - gross * taxRate;
+                databaseManager.addEMCBalance(uuid, net);
+                credited = true;
+                result = "menu.sell.success";
+                clearPlayerCache(uuid);
+                if (displaysBalance) balance = readSellBalance(uuid);
+                updateBatchSellProgress(uuid, soldByKey, unlocked);
+            }
+        } catch (SQLException | ClassNotFoundException | RuntimeException e) {
+            if (!credited && date != null && consumed > 0) {
+                try {
+                    databaseManager.addDailyEMCEarned(uuid, date, -consumed);
+                } catch (SQLException | ClassNotFoundException refundException) {
+                    e.addSuppressed(refundException);
+                }
+            }
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Error handling sell", e);
+        } finally {
+            completeSale(uuid, inv, holder, lines, sold, credited, result, net, balance, unlocked);
+        }
+    }
+
+    private void updateBatchSellProgress(UUID uuid, Map<String, Integer> soldByKey, List<String> unlocked)
+            throws SQLException, ClassNotFoundException {
+        List<String> keys = new ArrayList<>(soldByKey.keySet());
+        Map<String, Boolean> statuses = databaseManager.getUnlockedStatuses(uuid, keys);
+        keys.removeIf(key -> statuses.getOrDefault(key, false));
+        if (keys.isEmpty()) return;
+        List<String> sellKeys = keys.stream().filter(key -> configManager.getRequiredSell(key) > 0).toList();
+        Map<String, Integer> sellProgress = sellKeys.isEmpty() ? Map.of() : databaseManager.getSellProgresses(uuid, sellKeys);
+        Map<String, Integer> increments = new LinkedHashMap<>();
+        List<String> unlockCandidates = new ArrayList<>();
+        for (String key : keys) {
+            int requiredSell = configManager.getRequiredSell(key);
+            int progress = sellProgress.getOrDefault(key, 0);
+            int increment = Math.min(soldByKey.get(key), requiredSell - progress);
+            if (increment > 0) {
+                increments.put(key, increment);
+                progress += increment;
+            }
+            if (progress >= requiredSell) {
+                unlockCandidates.add(key);
+            }
+        }
+        databaseManager.addSellProgressBatch(uuid, increments);
+        List<String> mineKeys = unlockCandidates.stream().filter(key -> configManager.getRequiredMine(key) > 0).toList();
+        Map<String, Integer> mineProgress = mineKeys.isEmpty() ? Map.of() : databaseManager.getMineProgresses(uuid, mineKeys);
+        for (String key : unlockCandidates) {
+            if (mineProgress.getOrDefault(key, 0) < configManager.getRequiredMine(key)) continue;
+            databaseManager.unlockItem(uuid, key);
+            unlocked.add(key);
+        }
+        clearPlayerCache(uuid);
+    }
+
+    private void completeSale(UUID uuid, Inventory inv, MenuHolder holder, List<SaleLine> lines,
+                              int[] sold, boolean credited, String result, double net, Double balance, List<String> unlocked) {
+        saleDelivery.deliver(uuid, () -> {
+            List<ItemStack> returns = new ArrayList<>();
+            for (int index = 0; index < lines.size(); index++) {
+                SaleLine line = lines.get(index);
+                int unsold = line.amount() - (credited ? sold[index] : 0);
+                if (unsold <= 0) continue;
+                line.item().setAmount(unsold);
+                returns.add(line.item());
+            }
+            return returns;
+        }, current -> {
+            String prefix = configManager.getLang().getString("prefix", "");
+            String text = configManager.getLang().getString(result, "").replace("{amount}", String.format("%.2f", net));
+            current.sendMessage(ColorUtil.translateColorCodes(prefix + text));
+            for (String key : unlocked) {
+                String message = configManager.getLang().getString("mine.unlocked", "").replace("{item}", configManager.getItemName(key));
+                current.sendMessage(ColorUtil.translateColorCodes(prefix + message));
+            }
+            if (balance != null && current.getOpenInventory().getTopInventory() == inv) {
+                renderSellButtons(current, inv, holder.layout(), balance);
+            }
+        }, () -> pendingSales.remove(uuid));
+    }
+
+    private record SaleLine(String key, int amount, double price, ItemStack item) {}
 
     // ══════════════════════════ 兑换购买 ══════════════════════════
 
@@ -1227,15 +1234,7 @@ public class MenuManager implements Listener {
         return String.format("%.2f", emc);
     }
 
-    private List<ItemStack> cloneItemList(List<ItemStack> items) {
-        List<ItemStack> clones = new ArrayList<>(items.size());
-        for (ItemStack item : items) {
-            if (item != null) {
-                clones.add(item.clone());
-            }
-        }
-        return clones;
-    }
+
 
     private void returnItemsToPlayer(Player player, List<ItemStack> items) {
         for (ItemStack item : items) {
@@ -1253,163 +1252,66 @@ public class MenuManager implements Listener {
         }
     }
 
-    private String getDailyLimitDisplayText(Player player) {
-        if (!configManager.isDailyLimitEnabled()) {
-            return configManager.getLang().getString("daily_limit.unlimited", "&a无限");
-        }
-        double dailyLimit = configManager.getDailyLimitForPlayer(player);
-        if (dailyLimit == -1) {
-            return configManager.getLang().getString("daily_limit.unlimited", "&a无限");
-        }
-        try {
-            String effectiveDate = databaseManager.getEffectiveDate();
-            double earnedToday = databaseManager.getDailyEMCEarned(player.getUniqueId(), effectiveDate);
-            double remaining = Math.max(0, dailyLimit - earnedToday);
-            return "&6" + String.format("%.0f", remaining);
-        } catch (Exception e) {
-            return configManager.getLang().getString("daily_limit.unlimited", "&a无限");
-        }
-    }
+
 
     // ══════════════════════════ 缓存 ══════════════════════════
 
     private void startCacheCleanupTask() {
         schedulerUtil.runTimerAsync(() -> {
-            long currentTime = System.currentTimeMillis();
-            long thirtyMinutesAgo = currentTime - (30 * 60 * 1000);
-            List<UUID> toRemove = new ArrayList<>();
-            for (Map.Entry<UUID, Long> entry : playerCacheTimestamps.entrySet()) {
-                if (entry.getValue() < thirtyMinutesAgo) {
-                    toRemove.add(entry.getKey());
-                }
-            }
-            for (UUID playerUUID : toRemove) {
-                clearPlayerCache(playerUUID);
-                playerCacheTimestamps.remove(playerUUID);
-            }
+            long cutoff = System.currentTimeMillis() - 30 * 60 * 1000;
+            playerMenuCache.entrySet().removeIf(entry -> entry.getValue().lastAccess < cutoff);
         }, 0L, 5 * 60 * 20L);
     }
 
-    private double getCachedBalance(UUID playerUUID) {
-        if (playerBalanceCache.containsKey(playerUUID)) {
-            playerCacheTimestamps.put(playerUUID, System.currentTimeMillis());
-            return playerBalanceCache.get(playerUUID);
-        }
-        try {
-            double balance = databaseManager.getEMCBalance(playerUUID);
-            playerBalanceCache.put(playerUUID, balance);
-            playerCacheTimestamps.put(playerUUID, System.currentTimeMillis());
-            return balance;
-        } catch (SQLException | ClassNotFoundException e) {
-            plugin.getLogger().severe("Error getting balance: " + e.getMessage());
-            return 0.0;
-        }
+    private PlayerMenuCache playerMenuCache(UUID uuid) {
+        PlayerMenuCache cache = playerMenuCache.computeIfAbsent(uuid, key -> new PlayerMenuCache());
+        cache.lastAccess = System.currentTimeMillis();
+        return cache;
     }
 
-    private Map<String, Boolean> getCachedUnlockedStatuses(UUID playerUUID, List<String> materials) {
-        if (playerUnlockedCache.containsKey(playerUUID)) {
-            Map<String, Boolean> cachedStatuses = playerUnlockedCache.get(playerUUID);
-            boolean allCached = true;
-            for (String material : materials) {
-                if (!cachedStatuses.containsKey(material)) {
-                    allCached = false;
-                    break;
-                }
-            }
-            if (allCached) {
-                playerCacheTimestamps.put(playerUUID, System.currentTimeMillis());
-                Map<String, Boolean> result = new HashMap<>();
-                for (String material : materials) {
-                    result.put(material, cachedStatuses.get(material));
-                }
-                return result;
-            }
-        }
-        try {
-            Map<String, Boolean> statuses = databaseManager.getUnlockedStatuses(playerUUID, materials);
-            playerUnlockedCache.computeIfAbsent(playerUUID, k -> new HashMap<>()).putAll(statuses);
-            playerCacheTimestamps.put(playerUUID, System.currentTimeMillis());
-            return statuses;
-        } catch (SQLException | ClassNotFoundException e) {
-            plugin.getLogger().severe("Error getting unlocked statuses: " + e.getMessage());
-            Map<String, Boolean> defaultStatuses = new HashMap<>();
-            for (String material : materials) {
-                defaultStatuses.put(material, false);
-            }
-            return defaultStatuses;
-        }
+    private Map<String, Boolean> getCachedUnlockedStatuses(UUID uuid, List<String> keys) {
+        return getMenuValues(keys, playerMenuCache(uuid).unlocked, requested -> databaseManager.getUnlockedStatuses(uuid, requested));
     }
 
-    private Map<String, Integer> getCachedMineProgresses(UUID playerUUID, List<String> materials) {
-        if (playerMineProgressCache.containsKey(playerUUID)) {
-            Map<String, Integer> cachedProgresses = playerMineProgressCache.get(playerUUID);
-            boolean allCached = true;
-            for (String material : materials) {
-                if (!cachedProgresses.containsKey(material)) {
-                    allCached = false;
-                    break;
-                }
-            }
-            if (allCached) {
-                Map<String, Integer> result = new HashMap<>();
-                for (String material : materials) {
-                    result.put(material, cachedProgresses.get(material));
-                }
-                return result;
-            }
-        }
-        try {
-            Map<String, Integer> progresses = databaseManager.getMineProgresses(playerUUID, materials);
-            playerMineProgressCache.computeIfAbsent(playerUUID, k -> new HashMap<>()).putAll(progresses);
-            return progresses;
-        } catch (SQLException | ClassNotFoundException e) {
-            plugin.getLogger().severe("Error getting mine progresses: " + e.getMessage());
-            Map<String, Integer> defaultProgresses = new HashMap<>();
-            for (String material : materials) {
-                defaultProgresses.put(material, 0);
-            }
-            return defaultProgresses;
-        }
+    private Map<String, Integer> getCachedMineProgresses(UUID uuid, List<String> keys) {
+        return getMenuValues(keys, playerMenuCache(uuid).mined, requested -> databaseManager.getMineProgresses(uuid, requested));
     }
 
-    private Map<String, Integer> getCachedSellProgresses(UUID playerUUID, List<String> materials) {
-        if (playerSellProgressCache.containsKey(playerUUID)) {
-            Map<String, Integer> cachedProgresses = playerSellProgressCache.get(playerUUID);
-            boolean allCached = true;
-            for (String material : materials) {
-                if (!cachedProgresses.containsKey(material)) {
-                    allCached = false;
-                    break;
-                }
-            }
-            if (allCached) {
-                Map<String, Integer> result = new HashMap<>();
-                for (String material : materials) {
-                    result.put(material, cachedProgresses.get(material));
-                }
-                return result;
-            }
-        }
-        try {
-            Map<String, Integer> progresses = databaseManager.getSellProgresses(playerUUID, materials);
-            playerSellProgressCache.computeIfAbsent(playerUUID, k -> new HashMap<>()).putAll(progresses);
-            return progresses;
-        } catch (SQLException | ClassNotFoundException e) {
-            plugin.getLogger().severe("Error getting sell progresses: " + e.getMessage());
-            Map<String, Integer> defaultProgresses = new HashMap<>();
-            for (String material : materials) {
-                defaultProgresses.put(material, 0);
-            }
-            return defaultProgresses;
-        }
+    private Map<String, Integer> getCachedSellProgresses(UUID uuid, List<String> keys) {
+        return getMenuValues(keys, playerMenuCache(uuid).sold, requested -> databaseManager.getSellProgresses(uuid, requested));
     }
 
-    public void clearPlayerCache(UUID playerUUID) {
-        playerBalanceCache.remove(playerUUID);
-        playerUnlockedCache.remove(playerUUID);
-        playerMineProgressCache.remove(playerUUID);
-        playerSellProgressCache.remove(playerUUID);
-        playerCacheTimestamps.remove(playerUUID);
+    private <T> Map<String, T> getMenuValues(List<String> keys, Map<String, T> cache, MenuQuery<T> query) {
+        List<String> missing = keys.stream().filter(key -> !cache.containsKey(key)).toList();
+        try {
+            for (int offset = 0; offset < missing.size(); offset += 500) {
+                cache.putAll(query.load(missing.subList(offset, Math.min(offset + 500, missing.size()))));
+            }
+        } catch (SQLException | ClassNotFoundException e) {
+            plugin.getLogger().severe("Error loading menu data: " + e.getMessage());
+        }
+        Map<String, T> result = new HashMap<>();
+        for (String key : keys) {
+            T value = cache.get(key);
+            if (value != null) result.put(key, value);
+        }
+        return result;
+    }
+
+    @FunctionalInterface
+    private interface MenuQuery<T> {
+        Map<String, T> load(List<String> keys) throws SQLException, ClassNotFoundException;
+    }
+
+    private static final class PlayerMenuCache {
+        final Map<String, Boolean> unlocked = new ConcurrentHashMap<>();
+        final Map<String, Integer> mined = new ConcurrentHashMap<>();
+        final Map<String, Integer> sold = new ConcurrentHashMap<>();
+        volatile long lastAccess = System.currentTimeMillis();
+    }
+
+    public void clearPlayerCache(UUID uuid) {
+        playerMenuCache.remove(uuid);
     }
 
     /**
@@ -1421,6 +1323,7 @@ public class MenuManager implements Listener {
         org.bukkit.entity.Player player = org.bukkit.Bukkit.getPlayer(uuid);
         if (player == null) return;
         schedulerUtil.runAtEntity(player, () -> {
+            if (menuLoads.containsKey(uuid)) return;
             if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof MenuHolder holder)) return;
             switch (holder.menuType()) {
                 case "browse" -> openBrowseMenu(player, holder.page());
@@ -1433,34 +1336,13 @@ public class MenuManager implements Listener {
     }
 
     public void clearAllCache() {
-        playerBalanceCache.clear();
-        playerUnlockedCache.clear();
-        playerMineProgressCache.clear();
-        playerSellProgressCache.clear();
-        playerCacheTimestamps.clear();
+        playerMenuCache.clear();
+        menuLoads.clear();
         baseIconCache.clear();
         CeItemUtil.clearCache();
     }
 
-    private void checkUnlock(Player player, String materialName) throws SQLException, ClassNotFoundException {
-        int requiredMine = configManager.getRequiredMine(materialName);
-        int requiredSell = configManager.getRequiredSell(materialName);
 
-        int mineProgress = databaseManager.getMineProgress(player.getUniqueId(), materialName);
-        int sellProgress = databaseManager.getSellProgress(player.getUniqueId(), materialName);
-
-        boolean mineCondition = requiredMine == 0 || mineProgress >= requiredMine;
-        boolean sellCondition = requiredSell == 0 || sellProgress >= requiredSell;
-
-        if (mineCondition && sellCondition && !databaseManager.isUnlocked(player.getUniqueId(), materialName)) {
-            databaseManager.unlockItem(player.getUniqueId(), materialName);
-            clearPlayerCache(player.getUniqueId());
-            String itemDisplayName = configManager.getItemName(materialName);
-            final String message = configManager.getLang().getString("prefix") +
-                    configManager.getLang().getString("mine.unlocked").replace("{item}", itemDisplayName);
-            schedulerUtil.runTask(() -> player.sendMessage(ColorUtil.translateColorCodes(message)));
-        }
-    }
 
     // ══════════════════════════ 数据结构 ══════════════════════════
 
@@ -1551,6 +1433,16 @@ public class MenuManager implements Listener {
                 }
             }
             return slots;
+        }
+
+        boolean displaysBalance() {
+            return usesPlaceholder("%balance%");
+        }
+
+        boolean usesPlaceholder(String placeholder) {
+            return title.contains(placeholder) || buttons.values().stream().anyMatch(button ->
+                    (button.name != null && button.name.contains(placeholder))
+                            || button.lore.stream().anyMatch(line -> line != null && line.contains(placeholder)));
         }
     }
 

@@ -136,6 +136,7 @@ menu:
 | `/alex set <玩家> <金额>`      | 设置玩家的 EMC 值 | `alembcexchange.admin`    |
 | `/alex unlockall <玩家>`     | 解锁玩家的所有物品   | `alembcexchange.admin`    |
 | `/alex unlock <玩家> <物品ID>` | 解锁玩家的单个物品   | `alembcexchange.admin`    |
+| `/alex lock <玩家> <物品ID>`  | 重新锁定玩家的物品（重置该物品解锁进度） | `alembcexchange.admin`    |
 
 ## 权限
 
